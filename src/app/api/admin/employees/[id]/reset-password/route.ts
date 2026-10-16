@@ -101,7 +101,12 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
   // Send email (fire-and-forget — don't fail the request if email fails)
   try {
-    const loginUrl = (process.env.NEXTAUTH_URL ?? 'http://localhost:3000') + '/login';
+    const forwardedHost = req.headers.get('x-forwarded-host') || req.headers.get('host');
+    const isLocal = !forwardedHost || forwardedHost.includes('localhost') || forwardedHost.includes('127.0.0.1');
+    const hostBase = (!isLocal && forwardedHost)
+      ? `${req.headers.get('x-forwarded-proto') || 'https'}://${forwardedHost}`
+      : (process.env.APP_URL || process.env.NEXTAUTH_URL || req.nextUrl?.origin || 'http://localhost:3000');
+    const loginUrl = `${hostBase.replace(/\/+$/, '')}/login`;
     await sendEmail({
       to:      target.email,
       subject: passwordResetEmailSubject(),

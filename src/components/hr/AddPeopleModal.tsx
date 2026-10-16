@@ -68,6 +68,7 @@ export function AddPeopleModal({ onClose, onSuccess }: AddPeopleModalProps) {
     email:            string;
     name:             string;
     emailSent?:       boolean;
+    emailError?:      string | null;
     emailPreviewUrl?: string | null;
   } | null>(null);
 
@@ -111,11 +112,19 @@ export function AddPeopleModal({ onClose, onSuccess }: AddPeopleModalProps) {
         email:            resData.email,
         name:             resData.name,
         emailSent:        resData.emailSent,
+        emailError:       resData.emailError,
         emailPreviewUrl:  resData.emailPreviewUrl,
       });
 
       queryClient.invalidateQueries({ queryKey: ['employees'] });
-      toast.success(`Invitation email sent to ${resData.email} via Nodemailer`);
+      if (resData.emailSent) {
+        toast.success(`Invitation email sent to ${resData.email} via Nodemailer`);
+      } else {
+        toast.warning(
+          `Account created, but email failed: ${resData.emailError || 'Check SMTP credentials'}`,
+          { duration: 6000 },
+        );
+      }
       onSuccess?.();
     } catch {
       setServerError('An unexpected network error occurred.');
@@ -182,11 +191,18 @@ export function AddPeopleModal({ onClose, onSuccess }: AddPeopleModalProps) {
 
             <div>
               <h3 className="text-lg font-bold text-gray-900 dark:text-white">
-                Invitation Sent Successfully!
+                {successData.emailSent ? 'Invitation Sent Successfully!' : 'Invitation Created!'}
               </h3>
-              <p className="text-xs text-gray-500 dark:text-zinc-400 mt-1 max-w-md mx-auto">
-                An invitation email has been sent via Nodemailer to <strong className="text-gray-800 dark:text-zinc-200">{successData.email}</strong> for <strong className="text-gray-800 dark:text-zinc-200">{successData.name}</strong>.
-              </p>
+              {successData.emailSent ? (
+                <p className="text-xs text-gray-500 dark:text-zinc-400 mt-1 max-w-md mx-auto">
+                  An invitation email has been sent via Nodemailer to <strong className="text-gray-800 dark:text-zinc-200">{successData.email}</strong> for <strong className="text-gray-800 dark:text-zinc-200">{successData.name}</strong>.
+                </p>
+              ) : (
+                <div className="mt-2 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/40 p-2.5 text-xs text-amber-800 dark:text-amber-300 text-left">
+                  <p className="font-semibold mb-0.5">⚠️ Email delivery failed</p>
+                  <p className="text-[11px] opacity-90">{successData.emailError || 'Invalid SMTP credentials. Please check SMTP_PASS in .env.'}</p>
+                </div>
+              )}
               {successData.emailPreviewUrl && (
                 <div className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-brand/10 text-brand text-xs">
                   <span>Nodemailer Ethereal Inbox:</span>

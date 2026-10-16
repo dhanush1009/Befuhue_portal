@@ -65,7 +65,14 @@ export async function sendEmail({ to, subject, html, from }: SendEmailOptions): 
   }
 
   try {
-    const sender = from ?? `Befhue <${EMAIL_FROM}>`;
+    const fromAddress =
+      process.env.SMTP_FROM && !process.env.SMTP_FROM.includes('your-domain.example')
+        ? process.env.SMTP_FROM
+        : user
+        ? `Befhue <${user}>`
+        : `Befhue <${EMAIL_FROM}>`;
+
+    const sender = from ?? fromAddress;
     const info = await transporter.sendMail({
       from: sender,
       to,
