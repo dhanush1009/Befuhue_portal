@@ -23,27 +23,45 @@ export async function sendEmail({ to, subject, html, from }: SendEmailOptions): 
 
   let transporter: nodemailer.Transporter;
 
-  if (host && user) {
-    transporter = nodemailer.createTransport({
-      host,
-      port:   Number(process.env.SMTP_PORT ?? 587),
-      secure: process.env.SMTP_SECURE === 'true', // true for port 465, false for 587
-      auth: {
-        user,
-        pass: pass ?? '',
-      },
-    });
-  } else if (service === 'gmail' && user && pass) {
+  const isGmail =
+    service === 'gmail' ||
+    host === 'smtp.gmail.com' ||
+    (user && (user.endsWith('@gmail.com') || user.endsWith('@befhue.com')));
+
+  if (isGmail && user && pass) {
+    // Nodemailer's built-in 'gmail' service is recommended for Vercel/serverless
     transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: {
         user,
         pass,
       },
+      tls: {
+        rejectUnauthorized: false,
+      },
+    });
+  } else if (host && user && pass) {
+    transporter = nodemailer.createTransport({
+      host,
+      port:   Number(process.env.SMTP_PORT ?? 587),
+      secure: process.env.SMTP_SECURE === 'true' || Number(process.env.SMTP_PORT) === 465,
+      auth: {
+        user,
+        pass,
+      },
+      tls: {
+        rejectUnauthorized: false,
+      },
     });
   } else {
-    // Development / unconfigured SMTP fallback:
-    // Create an ethereal test account using Nodemailer so a real email is sent to a test inbox
+    // When SMTP credentials are not set on the hosting server
+    if (process.env.NODE_ENV === 'production' && !process.env.VERCEL_ENV?.includes('preview')) {
+      throw new Error(
+        'Email service not configured. Please add SMTP_USER and SMTP_PASS to your hosting (Vercel) Environment Variables.',
+      );
+    }
+
+    // Development fallback using Ethereal
     try {
       const testAccount = await nodemailer.createTestAccount();
       transporter = nodemailer.createTransport({
@@ -57,7 +75,6 @@ export async function sendEmail({ to, subject, html, from }: SendEmailOptions): 
       });
       console.log(`[mailer] Using Ethereal test inbox for Nodemailer (${testAccount.user})`);
     } catch {
-      // Fallback JSON transport if internet is unavailable for Ethereal
       transporter = nodemailer.createTransport({
         jsonTransport: true,
       });
