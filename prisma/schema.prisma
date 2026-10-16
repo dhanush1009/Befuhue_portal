@@ -162,6 +162,15 @@ model Task {
   history           TaskHistory[]
   deletedAt         DateTime?      // soft delete
 
+  // ── Timer & Performance Scoring (In Progress -> Internal Review) ────────────
+  inProgressAt        DateTime?    // When task was moved to IN_PROGRESS (timer starts)
+  timerStartedAt      DateTime?    // Explicit timer start timestamp
+  internalReviewAt    DateTime?    // When task was moved to INTERNAL_REVIEW (timer stops)
+  timerStoppedAt      DateTime?    // Explicit timer stop timestamp
+  timeTakenMinutes    Int?         // Duration in minutes between timer start and timer stop
+  performancePoints   Int?         // Automatically assigned points: 2 for early, 1 for on-time, 0 for overtime/late
+  performanceOutcome  String?      // 'EARLY' | 'ON_TIME' | 'OVERTIME'
+
   // Work item type
   itemType          ItemType       @default(TASK)
 

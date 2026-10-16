@@ -51,4 +51,25 @@ describe('Employee Invitation System', () => {
       expect(html).toContain('Befhue');
     });
   });
+
+  describe('Nodemailer sendEmail dispatch', () => {
+    it('successfully dispatches email using Nodemailer and returns messageId', async () => {
+      const { sendEmail } = await import('./mailer');
+      const result = await sendEmail({
+        to:      'test-employee@example.com',
+        subject: inviteEmployeeEmailSubject,
+        html:    inviteEmployeeEmailHtml({
+          name:       'Priya Patel',
+          email:      'priya@example.com',
+          role:       'EMPLOYEE',
+          department: 'Engineering',
+          acceptUrl:  'http://localhost:3000/accept-invite/token-123',
+        }),
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.messageId).toBeDefined();
+    }, 15000);
+  });
 });
+

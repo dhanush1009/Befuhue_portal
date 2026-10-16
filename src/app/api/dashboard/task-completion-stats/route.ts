@@ -5,7 +5,7 @@ import { requireAuth } from '@/lib/requireAuth';
 import { calculateTaskScore } from '@/lib/taskScoring';
 import { format, subDays, subWeeks, subMonths, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
 
-const COMPLETED_STATUSES: TaskStatus[] = ['DONE', 'CLOSED', 'VERIFIED'];
+const SCORED_STATUSES: TaskStatus[] = ['INTERNAL_REVIEW', 'CLIENT_REVIEW', 'DONE', 'CLOSED', 'VERIFIED'];
 
 /** Returns the IST calendar date string (yyyy-MM-dd) for a given moment. */
 function istDay(d: Date): string {
@@ -68,7 +68,7 @@ export async function GET(req: NextRequest) {
   try {
     if (activeView === 'team') {
       // ── Admin Dashboard: Combined column chart for all employees ─────────────
-      // 1. Fetch active employees and completed tasks concurrently
+      // 1. Fetch active employees and completed/scored tasks concurrently
       const [employees, tasks] = await Promise.all([
         prisma.user.findMany({
           where: { isActive: true },
@@ -78,7 +78,10 @@ export async function GET(req: NextRequest) {
         prisma.task.findMany({
           where: {
             deletedAt: { isSet: false },
-            status: { in: COMPLETED_STATUSES },
+            OR: [
+              { status: { in: SCORED_STATUSES } },
+              { performancePoints: { not: null } },
+            ],
           },
           select: {
             id: true,
@@ -91,6 +94,14 @@ export async function GET(req: NextRequest) {
             updatedAt: true,
             dueDate: true,
             createdAt: true,
+            inProgressAt: true,
+            timerStartedAt: true,
+            internalReviewAt: true,
+            timerStoppedAt: true,
+            timeTakenMinutes: true,
+            estimatedMinutes: true,
+            performancePoints: true,
+            performanceOutcome: true,
             participants: { select: { userId: true } },
           },
         }),
@@ -124,7 +135,7 @@ export async function GET(req: NextRequest) {
       let totalLate = 0;
 
       for (const t of tasks) {
-        const completedAt = t.doneAt ?? t.closedAt ?? t.verifiedAt ?? t.updatedAt;
+        const completedAt = t.internalReviewAt ?? t.timerStoppedAt ?? t.doneAt ?? t.closedAt ?? t.verifiedAt ?? t.updatedAt;
         if (startDate && completedAt < startDate) continue;
 
         // Count each task exactly once. Attribute to primary owner
@@ -135,7 +146,12 @@ export async function GET(req: NextRequest) {
         const empStats = statsMap.get(ownerId)!;
         empStats.completedCount += 1;
 
-        const score = calculateTaskScore(completedAt, t.dueDate, t.createdAt);
+        const score = calculateTaskScore(completedAt, t.dueDate, t.createdAt, {
+          timeTakenMinutes: t.timeTakenMinutes,
+          estimatedMinutes: t.estimatedMinutes,
+          storedPoints: t.performancePoints,
+          storedOutcome: t.performanceOutcome,
+        });
         if (score) {
           empStats.totalPoints += score.points;
           if (score.outcome === 'EARLY') {
@@ -180,15 +196,24 @@ export async function GET(req: NextRequest) {
     }
 
     // ── Employee Dashboard: Column chart showing completed tasks over time ─────
-    // Fetch only the logged-in employee's completed tasks
+    // Fetch only the logged-in employee's completed/scored tasks
     const tasks = await prisma.task.findMany({
       where: {
         deletedAt: { isSet: false },
-        status: { in: COMPLETED_STATUSES },
-        OR: [
-          { assigneeId: user.id },
-          { doneById: user.id },
-          { participants: { some: { userId: user.id } } },
+        AND: [
+          {
+            OR: [
+              { status: { in: SCORED_STATUSES } },
+              { performancePoints: { not: null } },
+            ],
+          },
+          {
+            OR: [
+              { assigneeId: user.id },
+              { doneById: user.id },
+              { participants: { some: { userId: user.id } } },
+            ],
+          },
         ],
       },
       select: {
@@ -199,13 +224,26 @@ export async function GET(req: NextRequest) {
         updatedAt: true,
         dueDate: true,
         createdAt: true,
+        inProgressAt: true,
+        timerStartedAt: true,
+        internalReviewAt: true,
+        timerStoppedAt: true,
+        timeTakenMinutes: true,
+        estimatedMinutes: true,
+        performancePoints: true,
+        performanceOutcome: true,
       },
     });
 
     // Map tasks to their actual completion date and scored item
     const scoredTasks = tasks.map((t) => {
-      const compDate = t.doneAt ?? t.closedAt ?? t.verifiedAt ?? t.updatedAt;
-      const score = calculateTaskScore(compDate, t.dueDate, t.createdAt);
+      const compDate = t.internalReviewAt ?? t.timerStoppedAt ?? t.doneAt ?? t.closedAt ?? t.verifiedAt ?? t.updatedAt;
+      const score = calculateTaskScore(compDate, t.dueDate, t.createdAt, {
+        timeTakenMinutes: t.timeTakenMinutes,
+        estimatedMinutes: t.estimatedMinutes,
+        storedPoints: t.performancePoints,
+        storedOutcome: t.performanceOutcome,
+      });
       return { compDate, score };
     });
 

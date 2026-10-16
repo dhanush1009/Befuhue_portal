@@ -14,7 +14,7 @@ import {
   endOfMonth,
 } from 'date-fns';
 
-const COMPLETED_STATUSES: TaskStatus[] = ['DONE', 'CLOSED', 'VERIFIED'];
+const SCORED_STATUSES: TaskStatus[] = ['INTERNAL_REVIEW', 'CLIENT_REVIEW', 'DONE', 'CLOSED', 'VERIFIED'];
 
 /** Returns the IST calendar date string (yyyy-MM-dd) for a given moment. */
 function istDay(d: Date): string {
@@ -97,6 +97,14 @@ export async function GET(req: NextRequest) {
           updatedAt: true,
           dueDate: true,
           createdAt: true,
+          inProgressAt: true,
+          timerStartedAt: true,
+          internalReviewAt: true,
+          timerStoppedAt: true,
+          timeTakenMinutes: true,
+          estimatedMinutes: true,
+          performancePoints: true,
+          performanceOutcome: true,
           participants: { select: { userId: true } },
         },
       }),
@@ -141,16 +149,21 @@ export async function GET(req: NextRequest) {
       const empStats = statsMap.get(ownerId)!;
       empStats.totalAssigned += 1;
 
-      // Check if task is completed
-      if (COMPLETED_STATUSES.includes(task.status)) {
-        const completionTimestamp = task.doneAt ?? task.closedAt ?? task.verifiedAt ?? task.updatedAt;
+      // Check if task is completed or reached review milestone with timer stopped
+      if (SCORED_STATUSES.includes(task.status) || task.performancePoints != null) {
+        const completionTimestamp = task.internalReviewAt ?? task.timerStoppedAt ?? task.doneAt ?? task.closedAt ?? task.verifiedAt ?? task.updatedAt;
 
         // Apply date range filter to completed tasks
         if (startDate && completionTimestamp < startDate) {
           continue;
         }
 
-        const score = calculateTaskScore(completionTimestamp, task.dueDate, task.createdAt);
+        const score = calculateTaskScore(completionTimestamp, task.dueDate, task.createdAt, {
+          timeTakenMinutes: task.timeTakenMinutes,
+          estimatedMinutes: task.estimatedMinutes,
+          storedPoints: task.performancePoints,
+          storedOutcome: task.performanceOutcome,
+        });
         if (score) {
           empStats.totalCompleted += 1;
           empStats.totalPoints += score.points;
@@ -243,7 +256,7 @@ export async function GET(req: NextRequest) {
 
     // Employee's tasks for points progression over time
     const userCompletedTasks = allTasks.filter((t) => {
-      if (!COMPLETED_STATUSES.includes(t.status)) return false;
+      if (!SCORED_STATUSES.includes(t.status) && t.performancePoints == null) return false;
       const isOwner =
         t.assigneeId === user.id ||
         t.doneById === user.id ||
@@ -283,9 +296,14 @@ export async function GET(req: NextRequest) {
         let late = 0;
 
         for (const t of userCompletedTasks) {
-          const compDate = t.doneAt ?? t.closedAt ?? t.verifiedAt ?? t.updatedAt;
+          const compDate = t.internalReviewAt ?? t.timerStoppedAt ?? t.doneAt ?? t.closedAt ?? t.verifiedAt ?? t.updatedAt;
           if (compDate >= day.start && compDate <= day.end) {
-            const sc = calculateTaskScore(compDate, t.dueDate, t.createdAt);
+            const sc = calculateTaskScore(compDate, t.dueDate, t.createdAt, {
+              timeTakenMinutes: t.timeTakenMinutes,
+              estimatedMinutes: t.estimatedMinutes,
+              storedPoints: t.performancePoints,
+              storedOutcome: t.performanceOutcome,
+            });
             if (sc) {
               pts += sc.points;
               comp += 1;
@@ -325,9 +343,14 @@ export async function GET(req: NextRequest) {
         let late = 0;
 
         for (const t of userCompletedTasks) {
-          const compDate = t.doneAt ?? t.closedAt ?? t.verifiedAt ?? t.updatedAt;
+          const compDate = t.internalReviewAt ?? t.timerStoppedAt ?? t.doneAt ?? t.closedAt ?? t.verifiedAt ?? t.updatedAt;
           if (compDate >= w.start && compDate <= w.end) {
-            const sc = calculateTaskScore(compDate, t.dueDate, t.createdAt);
+            const sc = calculateTaskScore(compDate, t.dueDate, t.createdAt, {
+              timeTakenMinutes: t.timeTakenMinutes,
+              estimatedMinutes: t.estimatedMinutes,
+              storedPoints: t.performancePoints,
+              storedOutcome: t.performanceOutcome,
+            });
             if (sc) {
               pts += sc.points;
               comp += 1;
@@ -367,9 +390,14 @@ export async function GET(req: NextRequest) {
         let late = 0;
 
         for (const t of userCompletedTasks) {
-          const compDate = t.doneAt ?? t.closedAt ?? t.verifiedAt ?? t.updatedAt;
+          const compDate = t.internalReviewAt ?? t.timerStoppedAt ?? t.doneAt ?? t.closedAt ?? t.verifiedAt ?? t.updatedAt;
           if (compDate >= m.start && compDate <= m.end) {
-            const sc = calculateTaskScore(compDate, t.dueDate, t.createdAt);
+            const sc = calculateTaskScore(compDate, t.dueDate, t.createdAt, {
+              timeTakenMinutes: t.timeTakenMinutes,
+              estimatedMinutes: t.estimatedMinutes,
+              storedPoints: t.performancePoints,
+              storedOutcome: t.performanceOutcome,
+            });
             if (sc) {
               pts += sc.points;
               comp += 1;

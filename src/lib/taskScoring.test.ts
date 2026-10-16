@@ -80,6 +80,62 @@ describe('Task Scoring & Performance Calculation', () => {
     expect(calculateTaskScore('invalid-date', deadline)).toBeNull();
   });
 
+  describe('Timer-Based Performance Scoring (In Progress -> Internal Review)', () => {
+    it('awards 2 points (Early) when time taken is less than estimated minutes', () => {
+      const completion = new Date('2026-10-16T10:45:00.000Z');
+      const score = calculateTaskScore(completion, null, null, {
+        timeTakenMinutes: 45,
+        estimatedMinutes: 60,
+      });
+
+      expect(score).not.toBeNull();
+      expect(score?.points).toBe(2);
+      expect(score?.outcome).toBe('EARLY');
+      expect(score?.timeTakenMinutes).toBe(45);
+      expect(score?.estimatedMinutes).toBe(60);
+    });
+
+    it('awards 1 point (On-Time) when time taken exactly equals estimated minutes', () => {
+      const completion = new Date('2026-10-16T11:00:00.000Z');
+      const score = calculateTaskScore(completion, null, null, {
+        timeTakenMinutes: 60,
+        estimatedMinutes: 60,
+      });
+
+      expect(score).not.toBeNull();
+      expect(score?.points).toBe(1);
+      expect(score?.outcome).toBe('ON_TIME');
+      expect(score?.timeTakenMinutes).toBe(60);
+    });
+
+    it('awards 0 points (Overtime / Late) when time taken exceeds estimated minutes', () => {
+      const completion = new Date('2026-10-16T11:20:00.000Z');
+      const score = calculateTaskScore(completion, null, null, {
+        timeTakenMinutes: 80,
+        estimatedMinutes: 60,
+      });
+
+      expect(score).not.toBeNull();
+      expect(score?.points).toBe(0);
+      expect(score?.outcome).toBe('LATE');
+      expect(score?.timeTakenMinutes).toBe(80);
+    });
+
+    it('respects pre-calculated storedPoints and storedOutcome from the task record', () => {
+      const completion = new Date('2026-10-16T12:00:00.000Z');
+      const score = calculateTaskScore(completion, null, null, {
+        storedPoints: 2,
+        storedOutcome: 'EARLY',
+        timeTakenMinutes: 30,
+        estimatedMinutes: 45,
+      });
+
+      expect(score).not.toBeNull();
+      expect(score?.points).toBe(2);
+      expect(score?.outcome).toBe('EARLY');
+    });
+  });
+
   it('ranks employees by total points descending and breaks ties properly', () => {
     const rawList = [
       {

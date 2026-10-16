@@ -64,9 +64,11 @@ export function AddPeopleModal({ onClose, onSuccess }: AddPeopleModalProps) {
   const [submitting, setSubmitting]   = useState(false);
   const [copied, setCopied]           = useState(false);
   const [successData, setSuccessData] = useState<{
-    inviteUrl: string;
-    email:     string;
-    name:      string;
+    inviteUrl:        string;
+    email:            string;
+    name:             string;
+    emailSent?:       boolean;
+    emailPreviewUrl?: string | null;
   } | null>(null);
 
   const {
@@ -105,13 +107,15 @@ export function AddPeopleModal({ onClose, onSuccess }: AddPeopleModalProps) {
       }
 
       setSuccessData({
-        inviteUrl: resData.inviteUrl,
-        email:     resData.email,
-        name:      resData.name,
+        inviteUrl:        resData.inviteUrl,
+        email:            resData.email,
+        name:             resData.name,
+        emailSent:        resData.emailSent,
+        emailPreviewUrl:  resData.emailPreviewUrl,
       });
 
       queryClient.invalidateQueries({ queryKey: ['employees'] });
-      toast.success(`Invitation sent to ${resData.email}`);
+      toast.success(`Invitation email sent to ${resData.email} via Nodemailer`);
       onSuccess?.();
     } catch {
       setServerError('An unexpected network error occurred.');
@@ -181,8 +185,21 @@ export function AddPeopleModal({ onClose, onSuccess }: AddPeopleModalProps) {
                 Invitation Sent Successfully!
               </h3>
               <p className="text-xs text-gray-500 dark:text-zinc-400 mt-1 max-w-md mx-auto">
-                An invitation email has been sent to <strong className="text-gray-800 dark:text-zinc-200">{successData.email}</strong> for <strong className="text-gray-800 dark:text-zinc-200">{successData.name}</strong>.
+                An invitation email has been sent via Nodemailer to <strong className="text-gray-800 dark:text-zinc-200">{successData.email}</strong> for <strong className="text-gray-800 dark:text-zinc-200">{successData.name}</strong>.
               </p>
+              {successData.emailPreviewUrl && (
+                <div className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-brand/10 text-brand text-xs">
+                  <span>Nodemailer Ethereal Inbox:</span>
+                  <a
+                    href={successData.emailPreviewUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline font-semibold hover:text-brand-hover inline-flex items-center gap-1"
+                  >
+                    View Dispatched Email <ExternalLink className="size-3" />
+                  </a>
+                </div>
+              )}
             </div>
 
             {/* Direct Link Box */}

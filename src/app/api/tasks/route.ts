@@ -121,6 +121,10 @@ const TASK_LIST_SELECT = {
   parentId: true, deletedAt: true, createdAt: true, updatedAt: true,
   estimatedMinutes: true, actualMinutes: true, effortVariance: true,
   closedAt: true, closedById: true,
+  // Timer & Performance Scoring fields
+  inProgressAt: true, timerStartedAt: true,
+  internalReviewAt: true, timerStoppedAt: true,
+  timeTakenMinutes: true, performancePoints: true, performanceOutcome: true,
   // Bug fields
   itemType: true, severity: true, stepsToReproduce: true,
   expectedBehavior: true, actualBehavior: true, environment: true,
@@ -311,6 +315,8 @@ export async function POST(req: NextRequest) {
             humanId,
             reporterId:       user.id,
             status:           (parsed.data as { status?: TaskStatus }).status ?? getDefaultStatus(itemTypeFinal),
+            inProgressAt:     ((parsed.data as { status?: TaskStatus }).status === 'IN_PROGRESS') ? new Date() : undefined,
+            timerStartedAt:   ((parsed.data as { status?: TaskStatus }).status === 'IN_PROGRESS') ? new Date() : undefined,
             reopenCount:      0,
             dueDate:          parsed.data.dueDate ? new Date(parsed.data.dueDate) : undefined,
             estimatedMinutes: estimatedTotal,

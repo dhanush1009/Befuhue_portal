@@ -9,6 +9,7 @@ import { SEVERITY_CONFIG } from '@/lib/bugUtils';
 import { isTaskBlocked, wouldCreateCycle } from '@/lib/dependencies';
 import { canViewTask } from '@/lib/taskVisibility';
 import { checkStatusMove, modeOf, type ParticipantLite } from '@/lib/taskAssignment';
+import { calculatePerformanceFromTimer, calculateTaskScore } from '@/lib/taskScoring';
 import type { BugSeverity } from '@prisma/client';
 
 const TASK_DETAIL_SELECT = {
@@ -18,6 +19,10 @@ const TASK_DETAIL_SELECT = {
   parentId: true, deletedAt: true, createdAt: true, updatedAt: true,
   estimatedMinutes: true, actualMinutes: true, effortVariance: true,
   closedAt: true, closedById: true,
+  // Timer & Performance Scoring fields
+  inProgressAt: true, timerStartedAt: true,
+  internalReviewAt: true, timerStoppedAt: true,
+  timeTakenMinutes: true, performancePoints: true, performanceOutcome: true,
   // Bug fields
   itemType: true, severity: true, stepsToReproduce: true,
   expectedBehavior: true, actualBehavior: true, environment: true,
@@ -75,6 +80,10 @@ const BEFORE_SELECT = {
   status: true, priority: true, title: true, description: true,
   dueDate: true, assigneeId: true, estimatedMinutes: true, actualMinutes: true,
   itemType: true, severity: true, dependsOn: true, doneAt: true, closedAt: true,
+  createdAt: true,
+  inProgressAt: true, timerStartedAt: true,
+  internalReviewAt: true, timerStoppedAt: true,
+  timeTakenMinutes: true, performancePoints: true, performanceOutcome: true,
   assignee: { select: { name: true } },
 } as const;
 
@@ -207,6 +216,40 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     const closesOffer = mode === 'OFFER' && !before.assigneeId && !!parsed.data.assigneeId;
     if (closesOffer) updateData.assignMode = 'SINGLE';
 
+    // ── Task Timer & Performance Points logic (In Progress -> Internal Review) ──
+    // 1. When an employee moves a task to IN_PROGRESS, the timer starts
+    if (parsed.data.status === 'IN_PROGRESS' && before.status !== 'IN_PROGRESS') {
+      const timerStart = new Date();
+      updateData.timerStartedAt = timerStart;
+      updateData.inProgressAt   = timerStart;
+    }
+
+    // 2. When an employee moves a task to INTERNAL_REVIEW, the timer stops and points are awarded
+    if (parsed.data.status === 'INTERNAL_REVIEW' && before.status !== 'INTERNAL_REVIEW') {
+      const timerStop = new Date();
+      updateData.timerStoppedAt   = timerStop;
+      updateData.internalReviewAt = timerStop;
+
+      const startTime = before.timerStartedAt ?? before.inProgressAt ?? before.createdAt;
+      const elapsedMs = Math.max(0, timerStop.getTime() - new Date(startTime).getTime());
+      const timeTakenMinutes = Math.max(1, Math.round(elapsedMs / 60000));
+      updateData.timeTakenMinutes = timeTakenMinutes;
+
+      if (!before.actualMinutes && !parsed.data.actualMinutes) {
+        updateData.actualMinutes = timeTakenMinutes;
+      }
+
+      // Calculate employee's performance & automatically assign points based on completion time
+      const perf = calculatePerformanceFromTimer(
+        timeTakenMinutes,
+        before.estimatedMinutes,
+        before.dueDate,
+        timerStop,
+      );
+      updateData.performancePoints = perf.points;
+      updateData.performanceOutcome = perf.outcome;
+    }
+
     if (isMovingToDone) {
       updateData.doneAt   = new Date();
       updateData.doneById = user.id;
@@ -220,6 +263,24 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         updateData.doneAt   = new Date();
         updateData.doneById = user.id;
       }
+    }
+
+    // Fallback: If moving to DONE or CLOSED and points were not yet calculated, calculate them now
+    if ((isMovingToDone || isClosing) && before.performancePoints == null && updateData.performancePoints == null) {
+      const compDate = new Date();
+      const startTime = before.timerStartedAt ?? before.inProgressAt ?? before.createdAt;
+      const elapsedMs = Math.max(0, compDate.getTime() - new Date(startTime).getTime());
+      const timeTakenMinutes = before.timeTakenMinutes ?? Math.max(1, Math.round(elapsedMs / 60000));
+      updateData.timeTakenMinutes = timeTakenMinutes;
+
+      const perf = calculatePerformanceFromTimer(
+        timeTakenMinutes,
+        before.estimatedMinutes,
+        before.dueDate,
+        compDate,
+      );
+      updateData.performancePoints = perf.points;
+      updateData.performanceOutcome = perf.outcome;
     }
 
     if (isReopening) {

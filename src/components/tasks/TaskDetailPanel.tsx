@@ -601,13 +601,49 @@ export function TaskDetailPanel({ taskId, onClose }: TaskDetailPanelProps) {
                     className="text-xs bg-gray-50 dark:bg-surface-dark-3 border border-gray-200 dark:border-violet-900/40 rounded-md px-2 py-1.5 text-gray-700 dark:text-violet-200/70 focus:ring-2 focus:ring-brand focus:outline-none dark:[color-scheme:dark]"
                   />
                 </div>
-                {['DONE', 'CLOSED', 'VERIFIED'].includes(task.status) && (() => {
-                  const compDate = task.doneAt ?? task.closedAt ?? task.verifiedAt ?? task.updatedAt;
-                  const score = calculateTaskScore(compDate, task.dueDate, task.createdAt);
+                {/* Timer active indicator when IN_PROGRESS */}
+                {task.status === 'IN_PROGRESS' && (
+                  <div className="col-span-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-2.5">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                        <span className="size-2 rounded-full bg-amber-500 animate-ping inline-block" />
+                        Task Timer Running
+                      </p>
+                      {task.estimatedMinutes && (
+                        <span className="text-[11px] text-amber-700/80 dark:text-amber-300/80 font-medium">
+                          Estimated: {formatEffort(task.estimatedMinutes)}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-amber-800 dark:text-amber-200 mt-1">
+                      Timer started when moved to In Progress. Moving this task to <strong>Internal Review</strong> will stop the timer and automatically assign your performance points!
+                    </p>
+                  </div>
+                )}
+
+                {/* Performance points when stopped (INTERNAL_REVIEW, CLIENT_REVIEW, DONE, CLOSED) or scored */}
+                {(['INTERNAL_REVIEW', 'CLIENT_REVIEW', 'DONE', 'CLOSED', 'VERIFIED'].includes(task.status) || task.performancePoints != null) && (() => {
+                  const compDate = task.internalReviewAt ?? task.timerStoppedAt ?? task.doneAt ?? task.closedAt ?? task.verifiedAt ?? task.updatedAt;
+                  const score = calculateTaskScore(compDate, task.dueDate, task.createdAt, {
+                    timeTakenMinutes: task.timeTakenMinutes,
+                    estimatedMinutes: task.estimatedMinutes,
+                    storedPoints: task.performancePoints,
+                    storedOutcome: task.performanceOutcome,
+                  });
                   if (!score) return null;
                   return (
                     <div className="col-span-2 rounded-lg border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-black/20 p-2.5">
-                      <p className="text-xs font-medium text-gray-500 dark:text-violet-300/45 uppercase tracking-wider mb-1">Performance Points</p>
+                      <div className="flex items-center justify-between mb-1">
+                        <p className="text-xs font-medium text-gray-500 dark:text-violet-300/45 uppercase tracking-wider">
+                          Task Performance & Points
+                        </p>
+                        {task.timeTakenMinutes ? (
+                          <span className="text-xs font-semibold text-gray-700 dark:text-zinc-300">
+                            Time Taken: {formatEffort(task.timeTakenMinutes)}
+                            {task.estimatedMinutes ? ` / ${formatEffort(task.estimatedMinutes)} est.` : ''}
+                          </span>
+                        ) : null}
+                      </div>
                       <div className="flex items-center gap-2">
                         <span className={cn(
                           'inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-bold',
@@ -615,7 +651,7 @@ export function TaskDetailPanel({ taskId, onClose }: TaskDetailPanelProps) {
                           score.outcome === 'ON_TIME' && 'bg-amber-500/20 text-amber-300 border border-amber-500/30',
                           score.outcome === 'LATE' && 'bg-rose-500/20 text-rose-400 border border-rose-500/30',
                         )}>
-                          +{score.points} Points ({score.outcome === 'EARLY' ? 'Completed Before Deadline · Early' : score.outcome === 'ON_TIME' ? 'Completed At Deadline · On-Time' : 'Completed After Deadline · Late'})
+                          +{score.points} Points ({score.outcome === 'EARLY' ? 'Completed Early (Ahead of Time)' : score.outcome === 'ON_TIME' ? 'Completed On-Time' : 'Completed Overtime'})
                         </span>
                       </div>
                     </div>

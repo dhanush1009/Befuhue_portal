@@ -5,26 +5,122 @@ export interface TaskScore {
   outcome: ScoringOutcome;
   completionDate: Date;
   deadlineDate: Date | null;
+  timeTakenMinutes?: number | null;
+  estimatedMinutes?: number | null;
+}
+
+export interface TaskScoreOptions {
+  timeTakenMinutes?: number | null;
+  estimatedMinutes?: number | null;
+  storedPoints?: number | null;
+  storedOutcome?: ScoringOutcome | string | null;
 }
 
 /**
- * Calculates task completion points based on strict deadline comparison:
- * - 2 points: Completed BEFORE the assigned deadline.
- * - 1 point: Completed EXACTLY at the assigned deadline (matched to the minute).
- * - 0 points: Completed AFTER the assigned deadline.
+ * Calculates employee performance points based on task completion time:
+ * When an employee moves a task to "In Progress", the timer starts.
+ * When they move it to "Internal Review", the timer stops.
  *
- * Comparisons use standard UTC epoch milliseconds, making the calculation
- * completely timezone-invariant.
+ * Scoring rules:
+ * - If estimatedMinutes is defined (> 0):
+ *   - timeTakenMinutes < estimatedMinutes: 2 points (EARLY)
+ *   - timeTakenMinutes === estimatedMinutes: 1 point (ON_TIME)
+ *   - timeTakenMinutes > estimatedMinutes: 0 points (LATE / OVERTIME)
+ * - Else if deadline is defined:
+ *   - completed before deadline: 2 points (EARLY)
+ *   - completed at deadline: 1 point (ON_TIME)
+ *   - completed after deadline: 0 points (LATE / OVERTIME)
+ * - Else (no estimate or deadline):
+ *   - 2 points (EARLY)
+ */
+export function calculatePerformanceFromTimer(
+  timeTakenMinutes?: number | null,
+  estimatedMinutes?: number | null,
+  deadline?: Date | string | null,
+  completionTimestamp?: Date | string | null,
+): { points: number; outcome: ScoringOutcome } {
+  if (estimatedMinutes != null && estimatedMinutes > 0 && timeTakenMinutes != null && timeTakenMinutes >= 0) {
+    if (timeTakenMinutes < estimatedMinutes) {
+      return { points: 2, outcome: 'EARLY' };
+    } else if (timeTakenMinutes === estimatedMinutes) {
+      return { points: 1, outcome: 'ON_TIME' };
+    } else {
+      return { points: 0, outcome: 'LATE' };
+    }
+  }
+
+  // Fallback to deadline if available
+  if (deadline && completionTimestamp) {
+    const comp = new Date(completionTimestamp);
+    const score = calculateTaskScore(comp, deadline);
+    if (score) {
+      return { points: score.points, outcome: score.outcome };
+    }
+  }
+
+  return { points: 2, outcome: 'EARLY' };
+}
+
+/**
+ * Calculates task completion points based on timer duration or strict deadline comparison:
+ * - 2 points: Completed BEFORE the estimated effort / deadline.
+ * - 1 point: Completed EXACTLY at the estimated effort / deadline.
+ * - 0 points: Completed AFTER the estimated effort / deadline (Overtime).
  */
 export function calculateTaskScore(
   completionTimestamp: Date | string | null | undefined,
   deadline: Date | string | null | undefined,
   createdAt?: Date | string | null | undefined,
+  options?: TaskScoreOptions,
 ): TaskScore | null {
   if (!completionTimestamp) return null;
   const comp = new Date(completionTimestamp);
   if (isNaN(comp.getTime())) return null;
 
+  // 1. If points were already explicitly calculated & stored, respect the stored score
+  if (options?.storedPoints != null) {
+    const rawOutcome = String(options.storedOutcome || '').toUpperCase();
+    const outcome: ScoringOutcome =
+      rawOutcome === 'ON_TIME'
+        ? 'ON_TIME'
+        : rawOutcome === 'LATE' || rawOutcome === 'OVERTIME'
+        ? 'LATE'
+        : 'EARLY';
+
+    return {
+      points: options.storedPoints,
+      outcome,
+      completionDate: comp,
+      deadlineDate: deadline ? new Date(deadline) : null,
+      timeTakenMinutes: options.timeTakenMinutes ?? null,
+      estimatedMinutes: options.estimatedMinutes ?? null,
+    };
+  }
+
+  // 2. If time taken and estimated effort are provided, evaluate performance from timer
+  if (
+    options?.estimatedMinutes != null &&
+    options.estimatedMinutes > 0 &&
+    options?.timeTakenMinutes != null &&
+    options.timeTakenMinutes >= 0
+  ) {
+    const perf = calculatePerformanceFromTimer(
+      options.timeTakenMinutes,
+      options.estimatedMinutes,
+      deadline,
+      comp,
+    );
+    return {
+      points: perf.points,
+      outcome: perf.outcome,
+      completionDate: comp,
+      deadlineDate: deadline ? new Date(deadline) : null,
+      timeTakenMinutes: options.timeTakenMinutes,
+      estimatedMinutes: options.estimatedMinutes,
+    };
+  }
+
+  // 3. Fallback to deadline date & time comparison
   if (!deadline) {
     // If no deadline was specified, task is awarded full early completion points (2 points)
     return {
@@ -32,6 +128,8 @@ export function calculateTaskScore(
       outcome: 'EARLY',
       completionDate: comp,
       deadlineDate: null,
+      timeTakenMinutes: options?.timeTakenMinutes ?? null,
+      estimatedMinutes: options?.estimatedMinutes ?? null,
     };
   }
 
@@ -42,6 +140,8 @@ export function calculateTaskScore(
       outcome: 'EARLY',
       completionDate: comp,
       deadlineDate: null,
+      timeTakenMinutes: options?.timeTakenMinutes ?? null,
+      estimatedMinutes: options?.estimatedMinutes ?? null,
     };
   }
 
@@ -77,6 +177,8 @@ export function calculateTaskScore(
       outcome: 'EARLY',
       completionDate: comp,
       deadlineDate: dead,
+      timeTakenMinutes: options?.timeTakenMinutes ?? null,
+      estimatedMinutes: options?.estimatedMinutes ?? null,
     };
   } else if (compMinute === deadMinute) {
     return {
@@ -84,6 +186,8 @@ export function calculateTaskScore(
       outcome: 'ON_TIME',
       completionDate: comp,
       deadlineDate: dead,
+      timeTakenMinutes: options?.timeTakenMinutes ?? null,
+      estimatedMinutes: options?.estimatedMinutes ?? null,
     };
   } else {
     return {
@@ -91,6 +195,8 @@ export function calculateTaskScore(
       outcome: 'LATE',
       completionDate: comp,
       deadlineDate: dead,
+      timeTakenMinutes: options?.timeTakenMinutes ?? null,
+      estimatedMinutes: options?.estimatedMinutes ?? null,
     };
   }
 }

@@ -115,9 +115,10 @@ export async function POST(req: NextRequest) {
 
     await createAuditLog(user.id, 'EMPLOYEE_INVITED', targetUser.id, 'Employee');
 
-    // Send the email with the invitation link
+    // Send the email with the invitation link via Nodemailer
+    let mailResult: { success: boolean; messageId?: string; previewUrl?: string | null } | null = null;
     try {
-      await sendEmail({
+      mailResult = await sendEmail({
         to:      email,
         subject: inviteEmployeeEmailSubject,
         html:    inviteEmployeeEmailHtml({
@@ -130,18 +131,20 @@ export async function POST(req: NextRequest) {
         }),
       });
     } catch (mailErr) {
-      console.error('[invites] Email dispatch failed or logged in dev:', mailErr);
+      console.error('[invites] Nodemailer email dispatch failed:', mailErr);
     }
 
     return NextResponse.json(
       {
-        success:   true,
-        message:   `Invitation sent to ${email}`,
-        inviteUrl: acceptUrl,
+        success:         true,
+        message:         `Invitation sent to ${email}`,
+        inviteUrl:       acceptUrl,
+        emailSent:       mailResult?.success ?? false,
+        emailPreviewUrl: mailResult?.previewUrl ?? null,
         token,
         email,
-        name:      fullName,
-        expiresAt: expiresAt.toISOString(),
+        name:            fullName,
+        expiresAt:       expiresAt.toISOString(),
       },
       { status: 201 },
     );

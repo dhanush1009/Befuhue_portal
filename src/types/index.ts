@@ -98,6 +98,14 @@ export interface Task {
   effortVariance:   number | null;
   closedAt:         Date | null;
   closedById:       string | null;
+  // Timer & Performance Scoring (In Progress -> Internal Review)
+  inProgressAt?:        Date | string | null;
+  timerStartedAt?:      Date | string | null;
+  internalReviewAt?:    Date | string | null;
+  timerStoppedAt?:      Date | string | null;
+  timeTakenMinutes?:    number | null;
+  performancePoints?:   number | null;
+  performanceOutcome?:  'EARLY' | 'ON_TIME' | 'OVERTIME' | 'LATE' | string | null;
   // Workflow tracking
   reopenCount:      number;
   testedById:       string | null;
