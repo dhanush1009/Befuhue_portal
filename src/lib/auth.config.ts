@@ -82,21 +82,42 @@ export const { auth } = NextAuth({
       return session;
     },
 
-    // ── Redirect — ensure relative paths and safe same-host redirects ─────
+    // ── Redirect — ensure valid absolute URLs without localhost mismatches ─
     async redirect({ url, baseUrl }: { url: string; baseUrl: string }) {
-      if (url.startsWith('/')) return url;
+      let base = baseUrl;
+      const appUrl = process.env.APP_URL;
+      const nextAuthUrl = process.env.NEXTAUTH_URL;
+      if (appUrl && !appUrl.includes('localhost') && !appUrl.includes('127.0.0.1')) {
+        base = appUrl.replace(/\/+$/, '');
+      } else if (nextAuthUrl && !nextAuthUrl.includes('localhost') && !nextAuthUrl.includes('127.0.0.1')) {
+        base = nextAuthUrl.replace(/\/+$/, '');
+      } else if (process.env.VERCEL_URL) {
+        base = `https://${process.env.VERCEL_URL.replace(/\/+$/, '')}`;
+      }
+
+      // If url is relative, return absolute URL using safe base
+      if (url.startsWith('/')) {
+        return `${base}${url}`;
+      }
+
       try {
         const urlObj = new URL(url);
-        // If pointing to localhost/127.0.0.1, convert to relative path so it stays on the live hosted domain
-        if (urlObj.hostname === 'localhost' || urlObj.hostname === '127.0.0.1') {
-          return `${urlObj.pathname}${urlObj.search}`;
+        if (
+          (urlObj.hostname === 'localhost' || urlObj.hostname === '127.0.0.1') &&
+          !base.includes('localhost') &&
+          !base.includes('127.0.0.1')
+        ) {
+          return `${base}${urlObj.pathname}${urlObj.search}`;
         }
         if (baseUrl && urlObj.origin === new URL(baseUrl).origin) {
           return url;
         }
-        return `${urlObj.pathname}${urlObj.search}`;
+        if (urlObj.origin === new URL(base).origin) {
+          return url;
+        }
+        return `${base}${urlObj.pathname}${urlObj.search}`;
       } catch {
-        return '/login';
+        return `${base}/dashboard`;
       }
     },
   },

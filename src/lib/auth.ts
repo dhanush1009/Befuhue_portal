@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import bcryptjs from 'bcryptjs';
 import type { Role } from '@prisma/client';
+import { getBaseUrl } from '@/lib/baseUrl';
 
 const credentialsSchema = z.object({
   email:    z.string().email(),
@@ -107,21 +108,42 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       return session;
     },
 
-    // ── Redirect — ensure relative paths and safe same-host redirects ─────
+    // ── Redirect — ensure valid absolute URLs without localhost mismatches ─
     async redirect({ url, baseUrl }: { url: string; baseUrl: string }) {
-      if (url.startsWith('/')) return url;
+      let base = baseUrl;
+      try {
+        const detected = getBaseUrl();
+        if (detected && !detected.includes('localhost') && !detected.includes('127.0.0.1')) {
+          base = detected;
+        }
+      } catch {
+        // fallback to baseUrl
+      }
+
+      // If url is relative, return absolute URL using safe base
+      if (url.startsWith('/')) {
+        return `${base}${url}`;
+      }
+
       try {
         const urlObj = new URL(url);
-        // If pointing to localhost/127.0.0.1, convert to relative path so it stays on the live hosted domain
-        if (urlObj.hostname === 'localhost' || urlObj.hostname === '127.0.0.1') {
-          return `${urlObj.pathname}${urlObj.search}`;
+        // If pointing to localhost/127.0.0.1 but base is a hosted production domain, rewrite origin
+        if (
+          (urlObj.hostname === 'localhost' || urlObj.hostname === '127.0.0.1') &&
+          !base.includes('localhost') &&
+          !base.includes('127.0.0.1')
+        ) {
+          return `${base}${urlObj.pathname}${urlObj.search}`;
         }
         if (baseUrl && urlObj.origin === new URL(baseUrl).origin) {
           return url;
         }
-        return `${urlObj.pathname}${urlObj.search}`;
+        if (urlObj.origin === new URL(base).origin) {
+          return url;
+        }
+        return `${base}${urlObj.pathname}${urlObj.search}`;
       } catch {
-        return '/login';
+        return `${base}/dashboard`;
       }
     },
   },
