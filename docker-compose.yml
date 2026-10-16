@@ -1,0 +1,82 @@
+version: '3.8'
+
+services:
+  mongo:
+    image: mongo:7
+    container_name: portal_mongo
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${DB_PORT:-27017}:27017"   # bind to loopback only — not exposed to network
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${DB_USER:-portal_admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${DB_PASSWORD:-CHANGE_ME_strong_password}
+    volumes:
+      - mongo_data:/data/db
+    # A replica set (even single-node) is required — the app uses Prisma's
+    # interactive $transaction() in several routes, and MongoDB only supports
+    # multi-document transactions on a replica set, never on a standalone instance.
+    command: ["--replSet", "rs0", "--bind_ip_all"]
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "-u", "${DB_USER:-portal_admin}", "-p", "${DB_PASSWORD:-CHANGE_ME_strong_password}", "--authenticationDatabase", "admin", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # One-shot: initializes the single-node replica set on first boot, then exits.
+  # Safe to re-run on every `up` — rs.status() short-circuits once already initiated.
+  mongo-init:
+    image: mongo:7
+    container_name: portal_mongo_init
+    restart: "no"
+    depends_on:
+      mongo:
+        condition: service_healthy
+    entrypoint:
+      - mongosh
+      - --host
+      - mongo:27017
+      - -u
+      - ${DB_USER:-portal_admin}
+      - -p
+      - ${DB_PASSWORD:-CHANGE_ME_strong_password}
+      - --authenticationDatabase
+      - admin
+      - --eval
+      - "try { rs.status(); print('replica set already initiated'); } catch (e) { rs.initiate({ _id: 'rs0', members: [{ _id: 0, host: 'mongo:27017' }] }); print('replica set initiated'); }"
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      # Enable BuildKit cache mounts
+      args:
+        BUILDKIT_INLINE_CACHE: "1"
+    container_name: portal_web
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: "mongodb://${DB_USER:-portal_admin}:${DB_PASSWORD:-CHANGE_ME_strong_password}@mongo:27017/${DB_NAME:-portal_db}?replicaSet=rs0&authSource=admin"
+
+      AUTH_URL:        ${AUTH_URL:-http://localhost:3000}
+      AUTH_SECRET:     ${AUTH_SECRET:-itdMmp+DV9DT8vVqcR4U/UvwHksP9mB5PtXdDaccwQc=}
+      AUTH_TRUST_HOST: "true"
+
+      NEXTAUTH_URL:    ${NEXTAUTH_URL:-http://localhost:3000}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-itdMmp+DV9DT8vVqcR4U/UvwHksP9mB5PtXdDaccwQc=}
+
+      GOOGLE_CLIENT_ID:              ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET:          ${GOOGLE_CLIENT_SECRET}
+      RESEND_API_KEY:                ${RESEND_API_KEY}
+      EMAIL_FROM:                    ${EMAIL_FROM}
+      NEXT_PUBLIC_SUPABASE_URL:      ${NEXT_PUBLIC_SUPABASE_URL}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+    depends_on:
+      mongo:
+        condition: service_healthy
+      mongo-init:
+        condition: service_completed_successfully
+
+volumes:
+  mongo_data:
+    driver: local

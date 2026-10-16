@@ -1,0 +1,1226 @@
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x", "linux-musl"]
+}
+
+model User {
+  id             String         @id @default(cuid()) @map("_id")
+  email          String         @unique
+  name           String
+  hashedPassword              String?
+  passwordHash                String?   // bcrypt hashed password (new field, replaces hashedPassword going forward)
+  mustChangePasswordOnLogin   Boolean   @default(false)
+  passwordChangedAt           DateTime?
+  passwordSetBy               String?   // 'ADMIN' | 'SELF'
+  tempPassword                String?   // stores plain temp password ONLY until first login, then nulled out
+  role           Role           @default(EMPLOYEE)
+  department     String?
+  designation    String?
+  phone          String?
+  avatarUrl      String?
+  managerId      String?
+  isActive       Boolean        @default(true)
+  deletedAt      DateTime?
+  employmentType String?        // FULL_TIME | PART_TIME | CONTRACT
+  joiningDate    DateTime?      // date of joining — separate from createdAt (account creation)
+  panNumber      String?        // PAN card number
+  aadhaarNumber  String?        // Aadhaar card number
+  fatherName     String?
+  motherName     String?
+  parentsPhone   String?        // Parents / emergency contact number
+  bondCertificateSubmitted Boolean @default(false)
+  manager        User?          @relation("Reports", fields: [managerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  reports        User[]         @relation("Reports")
+  attendance     Attendance[]
+  leaves         Leave[]
+  tasks          Task[]         @relation("Assignee")
+  assignedProjects Project[]    @relation("ProjectAssignee")
+  createdTasks   Task[]         @relation("Reporter")
+  closedTasks    Task[]         @relation("ClosedTasks")
+  testedTasks    Task[]         @relation("TestedTasks")
+  doneTasks      Task[]         @relation("DoneTasks")
+  readyForQaTasks Task[]        @relation("ReadyForQATasks")
+  bugVerifications Task[]       @relation("BugVerifier")
+  taskHistories  TaskHistory[]  @relation("TaskHistoryActor")
+  comments       Comment[]      @relation("CommentAuthor")
+  commentMentions CommentMention[] @relation("CommentMentioned")
+  documents      Document[]
+  notifications  Notification[]
+  announcements  Announcement[] @relation("AnnouncementAuthor")
+  pollsCreated   Poll[]         @relation("PollCreator")
+  pollVotes      PollVote[]     @relation("PollVoter")
+  wikiPages      WikiPage[]     @relation("WikiAuthor")
+  auditLogs      AuditLog[]     @relation("AuditActor")
+  salary         EmployeeSalary?
+  payslips       Payslip[]
+  leaveBalance   LeaveBalance[]
+  regularizationRequests       AttendanceRegularization[] @relation("RegularizationRequests")
+  regularizationsReviewed      AttendanceRegularization[] @relation("RegularizationReviewer")
+  regularizationsAdminReviewed AttendanceRegularization[] @relation("RegularizationAdmin")
+  addedQuotes    Quote[]
+  generatedReports ProjectReport[] @relation("ReportGenerator")
+  accountForClients Client[]     @relation("ClientAccountLead")
+  attendanceNotices AttendanceNotice[] @relation("AttendanceNotices")
+  taskParticipations TaskParticipant[] @relation("TaskParticipations")
+  // null / CLOCK_IN = normal clock-in/out. ANYWHERE = works from anywhere (e.g. founders): no clock-in needed, never shown as absent.
+  attendanceMode AttendanceMode?
+  details        EmployeeDetails?
+  careerEvents   CareerEvent[]
+  slackUserId    String?        // their Slack member id, found by matching work email
+  slackLookupAt  DateTime?      // when we last tried to find it (so we do not ask Slack on every notification)
+  slackMuted     Boolean?       // true = they turned Slack notifications off
+  apiTokens      ApiToken[]
+  oauthAuthCodes OAuthAuthorizationCode[]
+  oauthRefreshTokens OAuthRefreshToken[]
+  createdAt      DateTime       @default(now())
+}
+
+model Attendance {
+  id        String              @id @default(cuid()) @map("_id")
+  userId    String
+  user      User                @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  date      DateTime
+  type      AttendanceType      @default(OFFICE)
+  ipAddress String?
+  location  String?
+  sessions  AttendanceSession[]
+  regularizations AttendanceRegularization[]
+  createdAt DateTime            @default(now())
+
+  @@unique([userId, date])
+}
+
+model AttendanceSession {
+  id           String     @id @default(cuid()) @map("_id")
+  attendanceId String
+  attendance   Attendance @relation(fields: [attendanceId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  clockIn      DateTime
+  clockOut     DateTime?
+  durationMins Int?
+  note         String?    // e.g. "Auto closed at midnight"
+  isRegularized   Boolean  @default(false)  // true if created via regularization
+  regularizationId String?                  // link back to the regularization request
+  createdAt    DateTime   @default(now())
+
+  @@index([attendanceId])
+}
+
+model Leave {
+  id               String      @id @default(cuid()) @map("_id")
+  userId           String
+  user             User        @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  type             LeaveType
+  fromDate         DateTime
+  toDate           DateTime
+  days             Float
+  reason           String
+  status           LeaveStatus @default(PENDING)
+  approvedBy       String?
+  rejectedBy       String?
+  remarks          String?
+  documentUrl      String?
+  workingDaysCount Float?      // working days (Mon-Sat) in leave period
+  earnedLeaveUsed  Float?      // EL consumed from this leave
+  lopDays          Float?      // LOP days from this leave
+  createdAt        DateTime    @default(now())
+}
+
+model Task {
+  id                String         @id @default(cuid()) @map("_id")
+  humanId           String         @unique // e.g. "PROJ-001"
+  title             String
+  description       String?
+  status            TaskStatus     @default(TO_DO)
+  priority          Priority       @default(P2)
+  legacyProjectId   String?        // pre-rename bucket id (older projects) — kept for audit only
+  // SINGLE (null = SINGLE): one assignee, as always. TOGETHER: several people each own a part and the
+  // task only moves to review once every part is done. OFFER: offered to several people, the first to
+  // accept becomes the single assignee. Optional on purpose - older tasks have no value (= SINGLE).
+  assignMode        AssignMode?
+  offerRemindedAt   DateTime?      // set once the "nobody has accepted yet" reminder went out
+  participants      TaskParticipant[]
+  assigneeId        String?
+  assignee          User?          @relation("Assignee", fields: [assigneeId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  reporterId        String
+  reporter          User           @relation("Reporter", fields: [reporterId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  dueDate           DateTime?
+  parentId          String?
+  parent            Task?          @relation("SubTasks", fields: [parentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  subTasks          Task[]         @relation("SubTasks")
+  comments          Comment[]
+  estimatedMinutes  Int?           // mandatory on create — stored as total minutes
+  actualMinutes     Int?           // mandatory on done/verified — stored as total minutes
+  effortVariance    Int?           // calculated: actualMinutes - estimatedMinutes (set on done/verified)
+  closedAt          DateTime?      // timestamp when task was moved to CLOSED
+  closedById        String?        // who closed the task
+  closedBy          User?          @relation("ClosedTasks", fields: [closedById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  history           TaskHistory[]
+  deletedAt         DateTime?      // soft delete
+
+  // Work item type
+  itemType          ItemType       @default(TASK)
+
+  // Private tasks are only visible to the assignee, the reporter, and Admins —
+  // enforced server-side in every task query, not just hidden in the UI.
+  isPrivate         Boolean        @default(false)
+
+  // ── Agency work-management: Client → Project hierarchy — Project is optional ──
+  clientId              String
+  client                Client      @relation(fields: [clientId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  projectId             String?
+  project               Project?    @relation(fields: [projectId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  team                  Team?
+  phase                 WorkPhase?
+  dependsOn             String[]    @default([])  // task ids this task waits on
+  credentialIds         String[]    @default([])  // password-vault entries attached to this task (references only, never the secrets)
+  isGate                Boolean     @default(false) // gate tasks block engagement-level progress
+  needsClientApproval   Boolean     @default(false)
+  reviewerChain         String[]    @default([])  // ordered user ids for the review flow (Phase 3)
+  deliverableLinks       Json?       // [{ label, url }]
+  deliverableVersion     Int?        @default(1)
+
+  // Workflow tracking fields
+  reopenCount       Int            @default(0)   // tracks how many times a bug was reopened
+  testedById        String?                       // who moved it to IN_TESTING (claimed by)
+  testedBy          User?          @relation("TestedTasks", fields: [testedById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  testedAt          DateTime?
+  doneAt            DateTime?                     // when moved to DONE or VERIFIED
+  doneById          String?
+  doneBy            User?          @relation("DoneTasks", fields: [doneById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  readyForQaAt      DateTime?                     // when moved to READY_FOR_QA
+  readyForQaById    String?
+  readyForQaBy      User?          @relation("ReadyForQATasks", fields: [readyForQaById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  // Bug-specific fields (null for TASK type)
+  severity          BugSeverity?
+  stepsToReproduce  Json?          // array of step strings: ["Step 1: ...", "Step 2: ..."]
+  expectedBehavior  String?
+  actualBehavior    String?
+  environment       Json?          // { browser, os, appVersion, device }
+  affectedVersion   String?
+  fixedInVersion    String?        // set when bug is closed/fixed
+  isBugVerified     Boolean        @default(false)
+  verifiedById      String?
+  verifiedBy        User?          @relation("BugVerifier", fields: [verifiedById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  verifiedAt        DateTime?
+
+  // Billing and agency fields
+  agencyName        String?
+  amount            Float?         // Individual task amount — confidential, visible only to admins
+  currency          String         @default("INR")
+  billingReference  String?
+
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+}
+
+// ── Atomic sequence counters (e.g. per-prefix humanId numbering) ─────────────
+// A single findOneAndUpdate($inc) per request — the only way to hand out a
+// sequence number that's safe under real concurrent requests. Reading the
+// current max and writing max+1 as two separate steps always has a race.
+model Counter {
+  id  String @id @map("_id") // counter key, e.g. a project prefix like "GW", or "TASK" for project-less
+  seq Int    @default(0)
+}
+
+// ── Agency work-management: Client → Project → Task hierarchy ────────────────
+
+model Client {
+  id            String       @id @default(cuid()) @map("_id")
+  credentials   Credential[]
+  name          String
+  logoUrl       String?
+  industry      String?
+  website       String?
+  contactName   String?
+  contactEmail  String?
+  contactPhone  String?
+  notes         String?
+  accountLeadId String?
+  accountLead   User?        @relation("ClientAccountLead", fields: [accountLeadId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  status        ClientStatus @default(ACTIVE)
+  projects      Project[]
+  tasks         Task[]
+  billingType        String?      @default("RETAINER")
+  billingCurrency    String?      @default("INR")
+  billingAmount      Float?
+  billingCycle       String?      @default("MONTHLY")
+  paymentTerms       String?      @default("NET_30")
+  taxId              String?
+  billingEmail       String?
+  billingAddress     String?
+  clientType         String?      @default("CLIENT") // 'CLIENT' or 'AGENCY'
+  billingReference   String?
+  invoices           ClientInvoice[]
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  metaAccounts      MetaAdAccount[]
+}
+
+model ClientInvoice {
+  id             String         @id @default(cuid()) @map("_id")
+  clientId       String
+  client         Client         @relation(fields: [clientId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  invoiceNumber  String
+  title          String
+  amount         Float
+  currency       String         @default("INR")
+  status         String         @default("PENDING")
+  issueDate      DateTime       @default(now())
+  dueDate        DateTime?
+  paidDate       DateTime?
+  paymentMethod  String?
+  notes          String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+}
+
+model Project {
+  id          String        @id @default(cuid()) @map("_id")
+  clientId    String
+  client      Client        @relation(fields: [clientId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  name        String
+  description String?
+  prefix      String        @unique // e.g. "GW" — used for task ids like GW-001
+  type        ProjectType   @default(CUSTOM)
+  templateId  String?       // resolved to a Template relation in Phase 4
+  startDate   DateTime?
+  targetDate  DateTime?
+  deadline    DateTime?     // Target deadline for completion
+  status      ProjectStatus @default(ACTIVE)
+
+  // Assigned Employee
+  assignedEmployeeId String?
+  assignedEmployee   User?    @relation("ProjectAssignee", fields: [assignedEmployeeId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  // Financial amount (Admin only - protected at backend & frontend)
+  amount      Float?
+  currency    String        @default("INR")
+
+  tasks       Task[]
+  reports     ProjectReport[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  // This model was renamed from Engagement — the underlying MongoDB collection
+  // is still physically named "Engagement" (that's where the real data lives).
+  // An unrelated, now-orphaned "Project" collection predates this rename and
+  // is intentionally left untouched by this mapping.
+  @@map("Engagement")
+}
+
+// ── Personal access tokens — LLM/MCP integration ─────────────────────────────
+// Lets an employee generate a token so an external client (an MCP server
+// wrapping this API) can act through the same REST endpoints, as them,
+// subject to the same permission checks every browser session goes through.
+model ApiToken {
+  id           String    @id @default(cuid()) @map("_id")
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  name         String    // user-given label, e.g. "Claude Desktop" — or the OAuth client's name for auto-issued tokens
+  tokenHash    String    @unique // sha256 of the raw token — the raw value is shown once, never stored
+  tokenPrefix  String    // first ~12 chars of the raw token, for display/identification only
+  source       String    @default("manual") // "manual" (copy-pasted, long-lived) | "oauth" (issued via the OAuth flow, expires)
+  oauthClientId String?  // set when source = "oauth"
+  expiresAt    DateTime? // set when source = "oauth"; manual tokens never expire
+  lastUsedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  revokedAt    DateTime?
+}
+
+// ── OAuth 2.1 authorization server — lets remote MCP clients (Claude.ai,
+// ChatGPT, etc.) connect via the standard "paste a URL, log in, approve"
+// flow instead of a copy-pasted token. Ends the same place manual tokens
+// do: an ApiToken row, validated by the same requireAuth() code path.
+model OAuthClient {
+  id               String   @id @default(cuid()) @map("_id")
+  clientId         String   @unique
+  clientSecretHash String?  // null for public clients (PKCE-only) — the norm for MCP connectors
+  clientName       String
+  redirectUris     String[]
+  createdAt        DateTime @default(now())
+}
+
+model OAuthAuthorizationCode {
+  id                  String    @id @default(cuid()) @map("_id")
+  code                String    @unique
+  clientId            String
+  userId              String
+  user                User      @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  redirectUri         String
+  codeChallenge       String
+  codeChallengeMethod String    @default("S256")
+  scope               String?
+  expiresAt           DateTime
+  usedAt              DateTime?
+  createdAt           DateTime  @default(now())
+}
+
+model OAuthRefreshToken {
+  id         String    @id @default(cuid()) @map("_id")
+  tokenHash  String    @unique
+  apiTokenId String    // the ApiToken (access token) most recently issued alongside this refresh token
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  clientId   String
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+}
+
+model Comment {
+  id        String    @id @default(cuid()) @map("_id")
+  taskId    String
+  task      Task      @relation(fields: [taskId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  authorId  String
+  author    User      @relation("CommentAuthor", fields: [authorId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  body      Json      // Tiptap JSON
+  bodyText  String    // plain text for notifications/search
+  mentions  CommentMention[]
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model CommentMention {
+  id        String  @id @default(cuid()) @map("_id")
+  commentId String
+  comment   Comment @relation(fields: [commentId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  userId    String
+  user      User    @relation("CommentMentioned", fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  notified  Boolean @default(false)
+
+  @@unique([commentId, userId])
+}
+
+model Document {
+  id         String   @id @default(cuid()) @map("_id")
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  name       String
+  url        String
+  mimeType   String
+  sizeBytes  Int
+  uploadedBy String   // userId of uploader
+  createdAt  DateTime @default(now())
+}
+
+model Announcement {
+  id            String   @id @default(cuid()) @map("_id")
+  title         String
+  body          Json     // Tiptap JSON
+  authorId      String
+  author        User     @relation("AnnouncementAuthor", fields: [authorId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  isPinned      Boolean  @default(false)
+  attachmentUrl String?
+  reactions     Json     @default("{}") // { thumbsup: [userId,...], clap: [...], heart: [...] }
+  createdAt     DateTime @default(now())
+}
+
+model Poll {
+  id        String     @id @default(cuid()) @map("_id")
+  question  String
+  options   Json       // string[]
+  createdBy String
+  creator   User       @relation("PollCreator", fields: [createdBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  expiresAt DateTime?
+  isActive  Boolean    @default(true)
+  createdAt DateTime   @default(now())
+  votes     PollVote[]
+}
+
+model PollVote {
+  id          String   @id @default(cuid()) @map("_id")
+  pollId      String
+  poll        Poll     @relation(fields: [pollId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  userId      String
+  user        User     @relation("PollVoter", fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  optionIndex Int
+  createdAt   DateTime @default(now())
+
+  @@unique([pollId, userId])
+}
+
+model WikiPage {
+  id        String   @id @default(cuid()) @map("_id")
+  title     String
+  content   Json     // Tiptap JSON
+  category  String   @default("General")
+  authorId  String
+  author    User     @relation("WikiAuthor", fields: [authorId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+}
+
+model Notification {
+  id        String           @id @default(cuid()) @map("_id")
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  type      NotificationType
+  title     String
+  body      String
+  linkUrl   String?
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  @@index([userId, isRead])
+  @@index([userId, createdAt])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid()) @map("_id")
+  actorId    String
+  actor      User     @relation("AuditActor", fields: [actorId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  action     String
+  targetId   String
+  targetType String
+  changes    Json?
+  createdAt  DateTime @default(now())
+
+  @@index([targetId, targetType])
+  @@index([actorId])
+}
+
+model EmployeeSalary {
+  id                String   @id @default(cuid()) @map("_id")
+  userId            String   @unique
+  user              User     @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  basic             Float    @default(0)
+  hra               Float    @default(0)
+  conveyance        Float    @default(0)
+  medicalAllowance  Float    @default(0)
+  specialAllowance  Float    @default(0)
+  bonus             Float    @default(0)
+  incentive         Float    @default(0)
+  incomeTax         Float    @default(0)
+  providentFund     Float    @default(0)
+  esi               Float    @default(0)
+  professionalTax   Float    @default(0)
+  otherDeductions   Float    @default(0)
+  effectiveFrom     DateTime @default(now())
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model Payslip {
+  id                 String        @id @default(cuid()) @map("_id")
+  userId             String
+  user               User          @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  employeeId         String
+  month              Int
+  year               Int
+  payPeriod          String
+  payDate            DateTime
+  employeeName       String
+  designation        String
+  department         String
+  totalDays          Int
+  workingDays        Int
+  paidDays           Int
+  lopDays            Float
+  earnedLeaveUsed    Float
+  earnedLeaveBalance Float
+  basic              Float
+  hra                Float
+  conveyance         Float
+  medicalAllowance   Float
+  specialAllowance   Float
+  bonus              Float
+  incentive          Float
+  grossEarnings      Float
+  incomeTax          Float
+  providentFund      Float
+  esi                Float
+  professionalTax    Float
+  otherDeductions    Float
+  lopDeduction       Float
+  totalDeductions    Float
+  totalNetPay        Float
+  amountInWords      String
+  status             PayslipStatus @default(DRAFT)
+  publishedAt        DateTime?
+  pdfUrl             String?       // S3 URL — set at publish time, served directly on download
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  @@unique([userId, month, year])
+}
+
+model LeaveBalance {
+  id              String   @id @default(cuid()) @map("_id")
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  year            Int
+  earnedLeave     Float    @default(0)
+  usedEarnedLeave Float    @default(0)
+  lopDays         Float    @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([userId, year])
+}
+
+model CompanySettings {
+  id             String   @id @default("singleton") @map("_id")
+  name           String   @default("Deep Impression")
+  logoUrl        String?
+  address        String?  // shown in payslip header
+  payslipFooter  String?  // e.g. "Deep Impression · Growth, engineered. · your-domain.example"
+  updatedAt      DateTime @updatedAt
+}
+
+model AttendanceRegularization {
+  id                  String                 @id @default(cuid()) @map("_id")
+  userId              String
+  user                User                   @relation("RegularizationRequests", fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  date                DateTime
+  requestedClockIn    DateTime
+  requestedClockOut   DateTime?
+  reason              String
+  regularizationType  RegularizationType
+  status              RegularizationStatus   @default(PENDING)
+  reviewerId          String?
+  reviewer            User?                  @relation("RegularizationReviewer", fields: [reviewerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  reviewedAt          DateTime?
+  reviewerRemarks     String?
+  adminId             String?
+  admin               User?                  @relation("RegularizationAdmin", fields: [adminId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  adminReviewedAt     DateTime?
+  adminRemarks        String?
+  attendanceId        String?
+  attendance          Attendance?            @relation(fields: [attendanceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
+
+  @@unique([userId, date])
+}
+
+enum Role {
+  EMPLOYEE
+  ADMIN
+}
+
+enum LeaveType {
+  EARNED
+  CASUAL
+  SICK
+  LOP
+  COMP_OFF
+  MATERNITY
+  PATERNITY
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum AttendanceType {
+  OFFICE
+  WFH
+  HALF_DAY
+}
+
+enum AttendanceMode {
+  CLOCK_IN
+  ANYWHERE
+}
+
+// A heads-up an employee gives ahead of (or at) the time - "leaving early at
+// 4 PM, doctor's appointment". Planned leave is NOT modelled here: that stays
+// in the Leave model, which carries approval and balance/payroll consequences.
+enum NoticeType {
+  LEAVING_EARLY
+  LATE_ARRIVAL
+}
+
+model AttendanceNotice {
+  id           String     @id @default(cuid()) @map("_id")
+  userId       String
+  user         User       @relation("AttendanceNotices", fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  date         DateTime   // IST calendar day, normalized with getISTMidnight() like Attendance.date
+  type         NoticeType
+  expectedTime String     // "HH:mm", 24h IST — when they expect to leave / arrive
+  reason       String
+  // A soft flag rather than a nullable cancelledAt: on this Prisma+Mongo setup a
+  // `field: null` filter doesn't match documents where the field is unset.
+  isActive     Boolean    @default(true)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@unique([userId, date, type])
+  @@index([date])
+}
+
+model TaskHistory {
+  id          String            @id @default(cuid()) @map("_id")
+  taskId      String
+  task        Task              @relation(fields: [taskId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  actorId     String
+  actor       User              @relation("TaskHistoryActor", fields: [actorId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  action      TaskHistoryAction
+  fieldName   String?           // which field changed: "status", "assignee", "priority", "title", etc.
+  oldValue    String?           // human-readable old value
+  newValue    String?           // human-readable new value
+  oldRawValue String?           // raw value (id, enum, etc.) for programmatic use
+  newRawValue String?           // raw value
+  metadata    Json?             // extra context: { commentId, attachmentName, subtaskTitle, etc. }
+  createdAt   DateTime          @default(now())
+
+  @@index([taskId, createdAt])
+}
+
+enum ItemType {
+  TASK
+  BUG
+  DELIVERABLE
+}
+
+enum Team {
+  MARKETING
+  DESIGN
+  DEV
+}
+
+enum WorkPhase {
+  RESEARCH
+  FORECAST
+  BUILD
+  LAUNCH
+  OPTIMIZE
+}
+
+enum ClientStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum ProjectType {
+  FULL_REVAMP
+  LP_BUILD
+  RETAINER
+  CUSTOM
+}
+
+enum ProjectStatus {
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+  CANCELLED
+}
+
+enum BugSeverity {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum TaskStatus {
+  // Unified agency pipeline (current)
+  TO_DO
+  IN_PROGRESS
+  INTERNAL_REVIEW
+  CLIENT_REVIEW
+  DONE
+  CLOSED
+
+  // Legacy software-QA statuses — no longer assigned to new tasks after the
+  // agency work-management migration. Kept in the enum (not deleted) so old
+  // TaskHistory rows and any un-migrated data remain valid.
+  READY_FOR_QA
+  IN_TESTING
+  OPEN
+  VERIFIED
+}
+
+enum Priority {
+  P0
+  P1
+  P2
+  P3
+}
+
+enum PayslipStatus {
+  DRAFT
+  PUBLISHED
+  VOID
+}
+
+enum RegularizationType {
+  FORGOT_CLOCK_IN
+  FORGOT_CLOCK_OUT
+  WRONG_TIME
+  SYSTEM_ERROR
+  ON_FIELD_WORK
+  OTHER
+}
+
+enum RegularizationStatus {
+  PENDING
+  APPROVED_BY_REVIEWER
+  APPROVED
+  REJECTED
+  REJECTED_BY_ADMIN
+  WITHDRAWN
+}
+
+enum TaskHistoryAction {
+  TASK_CREATED
+  STATUS_CHANGED
+  ASSIGNEE_CHANGED
+  PRIORITY_CHANGED
+  TITLE_CHANGED
+  DESCRIPTION_CHANGED
+  DUE_DATE_CHANGED
+  DUE_DATE_REMOVED
+  LABEL_ADDED
+  LABEL_REMOVED
+  ESTIMATED_EFFORT_SET
+  ESTIMATED_EFFORT_CHANGED
+  ACTUAL_EFFORT_SET
+  ACTUAL_EFFORT_CHANGED
+  SUBTASK_ADDED
+  SUBTASK_COMPLETED
+  SUBTASK_REOPENED
+  SUBTASK_DELETED
+  ATTACHMENT_ADDED
+  ATTACHMENT_REMOVED
+  COMMENT_ADDED
+  COMMENT_DELETED
+  TASK_CLOSED
+  TASK_REOPENED
+  BUG_CREATED
+  SEVERITY_CHANGED
+  STEPS_UPDATED
+  ENVIRONMENT_UPDATED
+  BUG_VERIFIED
+  BUG_REOPENED_AFTER_VERIFY
+  FIXED_VERSION_SET
+  AFFECTED_VERSION_SET
+  MOVED_TO_READY_FOR_QA
+  MOVED_TO_IN_TESTING
+  MOVED_TO_DONE
+  MOVED_TO_VERIFIED
+  BUG_REOPENED_BY_QA
+  PEOPLE_CHANGED
+  OFFER_ACCEPTED
+  PART_DONE
+  PART_REOPENED
+}
+
+model Quote {
+  id        String   @id @default(cuid()) @map("_id")
+  text      String
+  author    String?  // optional — no "Unknown" fallback
+  isSystem  Boolean  @default(false) // system quotes cannot be deleted
+  isActive  Boolean  @default(true)  // inactive quotes never shown
+  addedById String?
+  addedBy   User?    @relation(fields: [addedById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum NotificationType {
+  JOINING_DATE_REQUEST
+  JOINING_DATE_DECIDED
+  CREDENTIAL_REQUEST
+  CREDENTIAL_DECIDED
+  LEAVE_APPLIED
+  LEAVE_APPROVED
+  LEAVE_REJECTED
+  TASK_ASSIGNED
+  TASK_MENTIONED
+  TASK_DUE_REMINDER
+  TASK_DONE
+  ANNOUNCEMENT
+  POLL_CREATED
+  WIKI_UPDATED
+  SYSTEM
+  REGULARIZATION_REQUEST
+  REGULARIZATION_APPROVED
+  REGULARIZATION_REJECTED
+  REGULARIZATION_APPEAL
+  HOLIDAYS_UPDATED
+  TASK_OFFERED
+  TASK_OFFER_TAKEN
+  TASK_OFFER_REMINDER
+  TASK_PART_DONE
+  ATTENDANCE_NOTICE
+  BUG_ASSIGNED
+  BUG_VERIFIED
+  BUG_SEVERITY_CHANGED
+  READY_FOR_QA
+  TESTING_STARTED
+  BUG_REOPENED_BY_QA
+}
+
+model ProjectReport {
+  id              String              @id @default(cuid()) @map("_id")
+  projectId       String
+  project         Project             @relation(fields: [projectId], references: [id])
+  month           Int                 // 1–12
+  year            Int
+  title           String              // e.g. "Deep Impression — June 2026 Report"
+  generatedById   String
+  generatedBy     User                @relation("ReportGenerator", fields: [generatedById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  generatedAt     DateTime            @default(now())
+
+  // Snapshot of report data (JSON — so it never changes after save)
+  reportData      Json                // full report payload stored on save
+
+  status          ReportStatus        @default(DRAFT)
+
+  // Sharing
+  shareToken      String?             @unique  // UUID token for public link
+  shareExpiresAt  DateTime?
+  isPublic        Boolean             @default(false)
+
+  // Notes added by admin when saving
+  notes           String?
+
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  @@unique([projectId, month, year])
+}
+
+enum ReportStatus {
+  DRAFT       // generated but not saved as snapshot
+  SAVED       // frozen snapshot saved to DB
+  SHARED      // shared via public link
+  ARCHIVED    // no longer active
+}
+
+// Company holiday calendar (mandatory leave days like Diwali, Pongal, New Year).
+// One per calendar day; `date` is noon-UTC of the IST day, like Attendance.date.
+model Holiday {
+  id        String   @id @default(cuid()) @map("_id")
+  date      DateTime @unique
+  name      String
+  note      String?
+  createdBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum AssignMode {
+  SINGLE
+  TOGETHER
+  OFFER
+}
+
+enum ParticipantKind {
+  COLLABORATOR // owns a part of a TOGETHER task
+  OFFEREE      // was offered an OFFER task and hasn't accepted (or lost the race)
+}
+
+// Who is on a task besides (or instead of) the single assignee. A TOGETHER task has one
+// COLLABORATOR row per person (each with their own "my part done" flag); an open OFFER task
+// has one OFFEREE row per person it was offered to. Offer rows are removed once someone accepts.
+model TaskParticipant {
+  id         String          @id @default(cuid()) @map("_id")
+  taskId     String
+  task       Task            @relation(fields: [taskId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  userId     String
+  user       User            @relation("TaskParticipations", fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  kind       ParticipantKind
+  role       String?         // free label, e.g. "Designer"
+  partDone   Boolean         @default(false)
+  partDoneAt DateTime?
+  createdAt  DateTime        @default(now())
+
+  @@unique([taskId, userId])
+  @@index([userId])
+}
+
+// ── Meta Ads ──────────────────────────────────────────────────────────────────
+// Daily performance pulled from the Meta Marketing API (see src/lib/meta). Accounts are
+// discovered from Meta, switched on by an admin, and mapped to a portal Client by hand.
+
+enum MetaLevel {
+  ACCOUNT
+  CAMPAIGN
+  ADSET
+  AD
+}
+
+model MetaAdAccount {
+  id              String    @id @default(cuid()) @map("_id")
+  accountId       String    @unique // numeric Meta id, without the "act_" prefix
+  name            String
+  currency        String    @default("INR")
+  timezoneName    String?
+  accountStatus   String?   // ACTIVE, DISABLED, UNSETTLED, CLOSED ...
+  businessName    String?
+  clientId        String?   // chosen by an admin - never matched automatically
+  client          Client?   @relation(fields: [clientId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  isEnabled       Boolean   @default(false) // only enabled accounts are synced
+  resultAction    String?   // which result to headline (action_type); null = automatic
+  customConversions Json?   // { "<custom conversion id>": "<name>" }
+  lastSyncedAt    DateTime?
+  lastSyncError   String?
+  syncedFrom      String?   // earliest day we hold, yyyy-MM-dd
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+// One row per account/campaign/ad set/ad per day. Dates are the ad account's own calendar day.
+model MetaInsightDaily {
+  id           String    @id @default(cuid()) @map("_id")
+  accountId    String
+  date         String    // yyyy-MM-dd
+  level        MetaLevel
+  objectId     String    // the account id for ACCOUNT rows
+  objectName   String
+  campaignId   String?
+  adsetId      String?
+  objective    String?
+  spend        Float     @default(0)
+  impressions  Int       @default(0)
+  reach        Int       @default(0)
+  clicks       Int       @default(0)
+  linkClicks   Int       @default(0)
+  actions      Json?     // { action_type: count }
+  actionValues Json?     // { action_type: value }
+
+  @@unique([accountId, date, level, objectId])
+  @@index([accountId, level, date])
+}
+
+// Account-level splits (age & gender, placement, device) per day.
+model MetaBreakdownDaily {
+  id           String   @id @default(cuid()) @map("_id")
+  accountId    String
+  date         String   // yyyy-MM-dd
+  breakdown    String   // age_gender | placement | device
+  key          String   // e.g. "25-34|female", "facebook|feed", "mobile_app"
+  spend        Float    @default(0)
+  impressions  Int      @default(0)
+  clicks       Int      @default(0)
+  actions      Json?
+  actionValues Json?
+
+  @@unique([accountId, date, breakdown, key])
+  @@index([accountId, breakdown, date])
+}
+
+// The Meta login an admin connected from the portal ("Connect Meta"). One row, id "default".
+// The access token is stored encrypted (AES-256-GCM); it is never sent to the browser.
+model MetaConnection {
+  id              String    @id @map("_id")
+  tokenEncrypted  String
+  expiresAt       DateTime?
+  metaUserId      String?
+  metaUserName    String?
+  scopes          String[]  @default([])
+  connectedById   String?
+  connectedAt     DateTime  @default(now())
+  lastRefreshedAt DateTime?
+  lastError       String?
+  updatedAt       DateTime  @updatedAt
+}
+
+
+// ── Employee details (HR record the employee fills in about themselves) ─────────────────────────
+// Every field is optional. Bank account, PAN, Aadhaar and UAN are stored encrypted ("...Enc") with
+// only the last 4 characters kept readable ("...Last4") so screens can show them masked.
+
+type DetailsAddress {
+  line1   String?
+  line2   String?
+  city    String?
+  state   String?
+  pincode String?
+}
+
+type DetailsNominee {
+  name         String
+  relationship String
+  dateOfBirth  DateTime?
+  sharePercent Int
+  phone        String?
+}
+
+type DetailsAsset {
+  type       String   // LAPTOP | PHONE | SIM | ID_CARD | ACCESS_CARD | OTHER
+  name       String
+  serial     String?
+  issuedOn   DateTime?
+  returnedOn DateTime?
+  notes      String?
+}
+
+model EmployeeDetails {
+  id     String @id @default(cuid()) @map("_id")
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  // Personal
+  preferredName  String?
+  dateOfBirth    DateTime?
+  hideBirthday   Boolean   @default(false)   // keep off the team birthdays card
+  gender         String?
+  bloodGroup     String?
+  maritalStatus  String?
+  nationality    String?
+  personalEmail  String?
+  altPhone       String?
+  languages      String[]
+  tshirtSize     String?
+  currentAddress   DetailsAddress?
+  permanentAddress DetailsAddress?
+  sameAddress      Boolean @default(false)
+
+  // Emergency
+  emergencyName      String?
+  emergencyRelation  String?
+  emergencyPhone     String?
+  emergency2Name     String?
+  emergency2Relation String?
+  emergency2Phone    String?
+  medicalNotes       String?
+
+  // Bank
+  bankHolderName     String?
+  bankName           String?
+  bankBranch         String?
+  ifsc               String?
+  accountType        String?
+  bankAccountEnc     String?
+  bankAccountLast4   String?
+
+  // Government IDs
+  panEnc       String?
+  panLast4     String?
+  aadhaarEnc   String?
+  aadhaarLast4 String?
+  uanEnc       String?
+  uanLast4     String?
+
+  // Education & experience
+  highestQualification String?
+  institute            String?
+  passingYear          Int?
+  totalExperienceYears Float?
+  previousEmployer     String?
+  previousRole         String?
+  previousDuration     String?
+  skills               String?
+  linkedinUrl          String?
+
+  // Nominees (PF / insurance)
+  nominees DetailsNominee[]
+
+  // Admin-only
+  relievingLetterSubmitted Boolean   @default(false)
+  backgroundCheckDone      Boolean   @default(false)
+  backgroundCheckDate      DateTime?
+  noticePeriodDays         Int?
+  workLocation             String?   // OFFICE | REMOTE | HYBRID
+  assets                   DetailsAsset[]
+
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+}
+
+
+// ── Career timeline (admin only): promotions and other milestones after joining ───────────────────
+// Joining itself is not stored here - it is read from User.joiningDate and shown first on the timeline.
+model CareerEvent {
+  id              String   @id @default(cuid()) @map("_id")
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  type            String   // PROMOTION | ROLE_CHANGE | TRANSFER | CONFIRMATION | OTHER
+  effectiveDate   DateTime // a whole day, stored at noon UTC
+  title           String
+  fromDesignation String?
+  toDesignation   String?
+  note            String?
+  createdById     String
+  createdAt       DateTime @default(now())
+
+  @@index([userId, effectiveDate])
+}
+
+
+// Remembers one-off Slack channel posts (e.g. "celebrations:2026-10-11") so a cron that runs twice does not post twice.
+model SlackPostLog {
+  key       String   @id @map("_id")
+  createdAt DateTime @default(now())
+}
+
+
+// ── Joining date change requests: an employee asks, any other admin approves ───────────────────────
+model JoiningDateRequest {
+  id            String   @id @default(cuid()) @map("_id")
+  userId        String
+  currentDate   DateTime?          // what it was when they asked
+  requestedDate DateTime           // a whole day, stored at noon UTC
+  reason        String
+  status        String   @default("PENDING")   // PENDING | APPROVED | REJECTED | CANCELLED
+  decidedById   String?
+  decidedAt     DateTime?
+  decisionNote  String?
+  createdAt     DateTime @default(now())
+
+  @@index([userId, status])
+  @@index([status, createdAt])
+}
+
+// ── Password vault ─────────────────────────────────────────────────────────────────────────────────
+// One entry per login that belongs to a brand (a Client). Username, password and notes are stored
+// encrypted ("...Enc"); everything else (brand, service, domain) is visible to every signed-in person.
+model Credential {
+  id          String   @id @default(cuid()) @map("_id")
+  clientId    String
+  client      Client   @relation(fields: [clientId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  service     String             // e.g. "Hostinger"
+  domain      String?            // e.g. "hostinger.com" - shown to everyone
+  label       String?            // e.g. "Hosting panel"
+  loginUrl    String?
+  usernameEnc String
+  passwordEnc String
+  notesEnc    String?
+  createdById String
+  updatedById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([clientId])
+}
+
+enum CredentialAccessStatus {
+  PENDING
+  APPROVED
+  DENIED
+  USED
+  CANCELLED
+}
+
+// A person asking to see one entry once. Approval opens a single viewing window; viewing it uses it up.
+model CredentialAccess {
+  id           String                 @id @default(cuid()) @map("_id")
+  credentialId String
+  requesterId  String
+  taskId       String?
+  reason       String
+  status       CredentialAccessStatus @default(PENDING)
+  decidedById  String?
+  decidedAt    DateTime?
+  decisionNote String?
+  expiresAt    DateTime?              // set on approval: the viewing window closes then
+  usedAt       DateTime?
+  createdAt    DateTime               @default(now())
+
+  @@index([requesterId, status])
+  @@index([status, createdAt])
+  @@index([credentialId])
+}

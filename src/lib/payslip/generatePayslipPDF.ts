@@ -1,0 +1,1 @@
+export { generatePayslipBlob } from './PayslipPDF';

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="befhue_red" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FF1A3C"/>
+      <stop offset="100%" stop-color="#E00024"/>
+    </linearGradient>
+  </defs>
+  <rect x="2" y="2" width="60" height="60" rx="16" fill="url(#befhue_red)"/>
+  <rect x="2.5" y="2.5" width="59" height="59" rx="15.5" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="1"/>
+  <path d="M18 13 C18 11.34 19.34 10 21 10 C22.66 10 24 11.34 24 13 V28.5 C26.3 26.3 29.5 25 33.5 25 C42 25 47.5 31.5 47.5 40 C47.5 48.5 42 55 33.5 55 C29.5 55 26.3 53.7 24 51.5 V52 C24 53.66 22.66 55 21 55 C19.34 55 18 53.66 18 52 V13 Z M33 31 C28 31 24 35 24 40 C24 45 28 49 33 49 C38 49 41.5 45 41.5 40 C41.5 35 38 31 33 31 Z" fill="#FFFFFF"/>
+  <circle cx="51.5" cy="51" r="4" fill="#FFFFFF"/>
+</svg>

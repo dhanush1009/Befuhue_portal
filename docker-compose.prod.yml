@@ -1,0 +1,59 @@
+version: '3.8'
+
+# Production compose — uses a pre-built image pulled from a registry.
+# Run with:  docker compose -f docker-compose.prod.yml up -d
+# Secrets:   copy .env.prod.example → .env (this file's env_file: entries read
+#            from ".env", not ".env.prod") and fill in real values.
+#
+# Database: MongoDB Atlas (managed, cloud-hosted) — DATABASE_URL in .env points
+# at the Atlas cluster directly. No local mongo container: Atlas already runs as
+# a replica set (required for this app's Prisma $transaction() calls) and handles
+# its own backups, so there's nothing to self-host here.
+
+services:
+  web:
+    image: ${DOCKER_IMAGE:-your-registry/portal}:${IMAGE_TAG:-latest}
+    container_name: portal_web
+    restart: always
+    ports:
+      - "127.0.0.1:3000:3000"   # bind to loopback — put Nginx/Caddy in front
+    env_file:
+      - .env
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+        reservations:
+          memory: 256m
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
+    # Graceful shutdown — allow Next.js server time to drain requests
+    stop_grace_period: 30s
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: portal_caddy
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - web
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  caddy_data:
+    driver: local
+  caddy_config:
+    driver: local

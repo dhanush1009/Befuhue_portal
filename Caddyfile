@@ -1,0 +1,18 @@
+portal.your-domain.example {
+	reverse_proxy web:3000
+
+	encode gzip zstd
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+	}
+
+	log {
+		output file /data/access.log {
+			roll_size 20mb
+			roll_keep 5
+		}
+	}
+}

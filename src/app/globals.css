@@ -1,0 +1,322 @@
+@import "tailwindcss";
+
+/* ── Tell Tailwind v4 to use .dark class (not prefers-color-scheme) ──────── */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ── Cursor: pointer on all interactive elements ─────────────────────────── */
+a,
+button,
+[role="button"],
+[role="tab"],
+[role="option"],
+[role="menuitem"],
+[role="checkbox"],
+[role="radio"],
+[role="switch"],
+[role="combobox"],
+[role="listbox"],
+input[type="checkbox"],
+input[type="radio"],
+input[type="file"],
+input[type="submit"],
+input[type="button"],
+input[type="reset"],
+select,
+label[for],
+summary,
+[tabindex]:not([tabindex="-1"]) {
+  cursor: pointer;
+}
+
+/* Draggable items (Kanban cards) */
+[data-draggable="true"] {
+  cursor: grab;
+}
+[data-draggable="true"]:active {
+  cursor: grabbing;
+}
+
+/* Disabled elements override back to not-allowed */
+button:disabled,
+input:disabled,
+select:disabled,
+textarea:disabled,
+[aria-disabled="true"] {
+  cursor: not-allowed !important;
+}
+
+/* Loading skeletons */
+.skeleton-loading {
+  cursor: wait;
+}
+
+/* Copyable text */
+[data-copyable] {
+  cursor: pointer;
+}
+
+/* ── Design tokens — Befhue brand system ───────────────────────── */
+@theme {
+  /* Brand — Befhue Red primary (#FF002C), per Befhue brand guidelines */
+  --color-brand:       #FF002C;
+  --color-brand-hover: #E50027;
+  --color-brand-light: #FFF1F2;
+  --color-brand-muted: #FB7185;
+
+  /* Full brand ramp, for anywhere a shade beyond the 4 brand tokens is needed */
+  --color-violet-50:  #FFF1F2;
+  --color-violet-100: #FFE4E6;
+  --color-violet-200: #D4D4D8; /* dark-mode secondary text  (neutral) */
+  --color-violet-300: #B8B8C0; /* dark-mode muted text       (neutral) */
+  --color-violet-400: #8E8E99; /* dark-mode placeholders     (neutral) */
+  --color-violet-500: #FF002C;
+  --color-violet-600: #E50027;
+  --color-violet-700: #CC0023;
+  --color-violet-800: #9E001B;
+  --color-violet-900: #4A4A52; /* dark-mode borders at /30-/40 alpha (neutral) */
+  --color-violet-950: #1C1C22;
+
+  /* Sidebar — deep charcoal-black, always dark regardless of theme */
+  --color-sidebar-bg:     #0D0D10;
+  --color-sidebar-text:   #A1A1AA;
+  --color-sidebar-active: #FF002C;
+  --color-sidebar-hover:  #18181D;
+
+  /* Dark-mode surface scale — premium violet-black canvas, replaces generic slate.
+     Ordered darkest → lightest so raised elements (cards, menus) visibly "lift". */
+  --color-canvas-dark:      #09090B; /* page background — deepest */
+  --color-surface-dark:     #0F0F12; /* chrome: header, sidebar */
+  --color-surface-dark-2:   #131317; /* raised: cards, dropdowns, panels */
+  --color-surface-dark-3:   #18181D; /* cards / hover / active fills */
+  --color-border-dark:      rgba(255, 255, 255, 0.10);
+  --color-border-dark-soft: rgba(255, 255, 255, 0.06);
+
+  /* Status */
+  --color-status-present: #16A34A;
+  --color-status-absent:  #DC2626;
+  --color-status-wfh:     #D97706;
+  --color-status-leave:   #DB2777;
+  --color-status-holiday: #0891B2;
+
+  /* Priority */
+  --color-priority-p0: #DC2626;
+  --color-priority-p1: #D97706;
+  --color-priority-p2: #2563EB;
+  --color-priority-p3: #6B7280;
+
+  /* Typography — Mortane Sans Serif */
+  --font-sans: var(--font-mortane), 'Mortane', 'Mortane Sans', 'MortaneDEMO', sans-serif;
+
+  /* Font spacing tokens — generous spacing for Mortane */
+  --tracking-tighter: 0.02em;
+  --tracking-tight:   0.035em;
+  --tracking-normal:  0.05em;
+  --tracking-wide:    0.08em;
+  --tracking-wider:   0.12em;
+  --tracking-widest:  0.18em;
+}
+
+@font-face {
+  font-family: 'Mortane';
+  src: url('/fonts/mortane.ttf') format('truetype');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Mortane Sans';
+  src: url('/fonts/mortane.ttf') format('truetype');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'MortaneDEMO';
+  src: url('/fonts/mortane.ttf') format('truetype');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ── Base styles ─────────────────────────────────────────────────────────── */
+@layer base {
+  * {
+    letter-spacing: 0.04em;
+  }
+
+  html {
+    height: 100%;
+    font-size: 106.25%; /* 17px base — every rem-based Tailwind size scales up proportionally */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    color-scheme: light;
+  }
+
+  html.dark {
+    color-scheme: dark;
+  }
+
+  body {
+    min-height: 100%;
+    background-color: #F4F4F5;   /* zinc-100 — light default */
+    color: #111827;               /* gray-900 */
+    font-family: var(--font-sans);
+    letter-spacing: 0.045em;
+    word-spacing: 0.06em;
+    font-synthesis: none;
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+
+  .dark body {
+    background-color: #09090B;   /* canvas-dark — near-black */
+    color: #F4F4F5;               /* zinc-100 */
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    letter-spacing: 0.055em;
+    word-spacing: 0.08em;
+  }
+
+  h1 {
+    letter-spacing: 0.065em;
+  }
+
+  p, span, a, button, input, label, select, textarea {
+    letter-spacing: 0.04em;
+  }
+}
+
+/* ── Utilities ───────────────────────────────────────────────────────────── */
+@layer utilities {
+  /* Override Tailwind negative tracking to give Mortane comfortable letter spacing */
+  .tracking-tight, [class*="tracking-tight"] {
+    letter-spacing: 0.04em !important;
+  }
+  .tracking-tighter, [class*="tracking-tighter"] {
+    letter-spacing: 0.025em !important;
+  }
+  .tracking-normal, [class*="tracking-normal"] {
+    letter-spacing: 0.05em !important;
+  }
+  .tracking-wide, [class*="tracking-wide"] {
+    letter-spacing: 0.08em !important;
+  }
+  .tracking-wider, [class*="tracking-wider"] {
+    letter-spacing: 0.12em !important;
+  }
+  .tracking-widest, [class*="tracking-widest"] {
+    letter-spacing: 0.18em !important;
+  }
+
+  .glass-card {
+    background-color: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.08);
+  }
+
+  .dark .glass-card {
+    background-color: rgba(15, 23, 42, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .custom-scrollbar::-webkit-scrollbar        { width: 6px; height: 6px; }
+  .custom-scrollbar::-webkit-scrollbar-track  { background: transparent; }
+  .custom-scrollbar::-webkit-scrollbar-thumb  {
+    background-color: rgba(156, 163, 175, 0.4);
+    border-radius: 10px;
+  }
+  .dark .custom-scrollbar::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0.14);
+  }
+
+  .interactive-node {
+    transition-property: color, background-color, border-color, opacity, transform;
+    transition-duration: 150ms;
+    transition-timing-function: ease;
+  }
+  .interactive-node:active { scale: 0.98; }
+
+  /* Slow-drifting blob shapes — login page background */
+  @keyframes blob {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    33%      { transform: translate(24px, -32px) scale(1.06); }
+    66%      { transform: translate(-18px, 18px) scale(0.94); }
+  }
+  .animate-blob { animation: blob 14s ease-in-out infinite; }
+
+  /* Entrance animation — login card/logo */
+  @keyframes fade-in-up {
+    from { opacity: 0; transform: translateY(14px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .animate-fade-in-up { animation: fade-in-up 0.6s ease-out both; }
+
+  /* Bell shake animation for new notifications */
+  @keyframes bell-shake {
+    0%   { transform: rotate(0deg); }
+    15%  { transform: rotate(-10deg); }
+    30%  { transform: rotate(10deg); }
+    45%  { transform: rotate(-5deg); }
+    60%  { transform: rotate(5deg); }
+    75%  { transform: rotate(-2deg); }
+    100% { transform: rotate(0deg); }
+  }
+  .animate-bell-shake { animation: bell-shake 0.6s ease-in-out; }
+
+  /* Payslip print styles */
+  @media print {
+    @page { size: A4; margin: 12mm; }
+    html, body { background: white !important; }
+    body > * { display: none !important; }
+    #payslip-print-root { display: block !important; position: fixed; inset: 0; z-index: 99999; background: white; overflow: visible; }
+    #payslip-print-root > .print\:hidden { display: none !important; }
+    #payslip-print {
+      display: block !important;
+      border: none !important;
+      box-shadow: none !important;
+      border-radius: 0 !important;
+      max-width: 100% !important;
+      margin: 0 !important;
+      padding: 0 !important;
+    }
+    .print\:hidden { display: none !important; }
+  }
+
+  /* Tiptap rich text styles */
+  .tiptap-content .ProseMirror { outline: none; }
+  .tiptap-content .ProseMirror p { margin: 0 0 0.5rem; }
+  .tiptap-content .ProseMirror h2 { font-size: 1.1rem; font-weight: 600; margin: 0.75rem 0 0.25rem; color: #111827; }
+  .dark .tiptap-content .ProseMirror h2 { color: #f1f5f9; }
+  .tiptap-content .ProseMirror ul, .tiptap-content .ProseMirror ol { padding-left: 1.25rem; margin: 0.25rem 0 0.5rem; }
+  .tiptap-content .ProseMirror li { margin-bottom: 0.125rem; }
+  .tiptap-content .ProseMirror a { color: #8E51FF; text-decoration: underline; cursor: pointer; transition: color 0.15s ease; }
+  .tiptap-content .ProseMirror a:hover { color: #7F22FE; }
+  .dark .tiptap-content .ProseMirror a { color: #A684FF; }
+  .dark .tiptap-content .ProseMirror a:hover { color: #C4B4FF; }
+  .tiptap-content .ProseMirror strong { font-weight: 600; }
+  .tiptap-content .ProseMirror em { font-style: italic; }
+  .tiptap-content .ProseMirror p.is-editor-empty:first-child::before { content: attr(data-placeholder); color: #9ca3af; pointer-events: none; float: left; height: 0; }
+
+  /* Mention pill styles */
+  .mention {
+    display: inline;
+    background-color: #EDE9FE;
+    color: #7F22FE;
+    border-radius: 4px;
+    padding: 0 4px;
+    font-weight: 500;
+    font-size: 0.875rem;
+    cursor: default;
+    user-select: none;
+  }
+  .dark .mention {
+    background-color: rgba(142, 81, 255, 0.2);
+    color: #A684FF;
+  }
+}
