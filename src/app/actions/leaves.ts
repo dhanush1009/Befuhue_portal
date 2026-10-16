@@ -7,6 +7,7 @@ import { calculateWorkingDays, formatDate } from '@/lib/utils';
 import { getHolidayKeySet } from '@/lib/holidaysDb';
 import { sendEmail, EMAIL_FROM } from '@/lib/mailer';
 import { LEAVE_TYPES } from '@/lib/constants';
+import { getBaseUrl } from '@/lib/baseUrl';
 import type { LeaveType, Role } from '@prisma/client';
 
 const leaveFormSchema = z.object({
@@ -75,7 +76,7 @@ async function notifyManagerOfLeaveRequest(
   const typeLabel  = LEAVE_TYPES.find((t) => t.value === leave.type)?.label ?? leave.type;
   const from       = formatDate(leave.fromDate);
   const to         = formatDate(leave.toDate);
-  const loginUrl   = process.env.NEXTAUTH_URL ?? 'http://localhost:3000';
+  const loginUrl   = getBaseUrl();
 
   await sendEmail({
     to:      manager.email,

@@ -8,6 +8,7 @@ import { createNotification } from '@/lib/notifications';
 import { sendEmail, EMAIL_FROM } from '@/lib/mailer';
 import { applyRegularization } from '@/lib/regularization';
 import { regularizationApprovedHtml, regularizationApprovedSubject } from '@/lib/emails/regularization';
+import { getBaseUrl } from '@/lib/baseUrl';
 
 const schema = z.object({ remarks: z.string().optional() });
 
@@ -64,7 +65,7 @@ export async function PATCH(
     approvedBy: { before: null, after: user.id },
   });
 
-  const loginUrl = process.env.NEXTAUTH_URL ?? 'http://localhost:3000';
+  const loginUrl = getBaseUrl(req);
 
   // In-app notification
   await createNotification(

@@ -68,9 +68,22 @@ function LoginForm() {
         router.push('/change-password');
       } else {
         toast.success('Signed in successfully!');
-        // Honor a callbackUrl (e.g. set by middleware redirecting from /oauth/authorize)
-        // so third-party MCP/OAuth connections return to the right place after login.
-        router.push(callbackUrl && callbackUrl.startsWith('/') ? callbackUrl : '/dashboard');
+        let destination = '/dashboard';
+        if (callbackUrl) {
+          if (callbackUrl.startsWith('/') && !callbackUrl.startsWith('//')) {
+            destination = callbackUrl;
+          } else {
+            try {
+              const parsed = new URL(callbackUrl, window.location.origin);
+              if (parsed.origin === window.location.origin) {
+                destination = `${parsed.pathname}${parsed.search}`;
+              }
+            } catch {
+              // ignore
+            }
+          }
+        }
+        router.push(destination);
       }
       router.refresh();
     }

@@ -81,6 +81,24 @@ export const { auth } = NextAuth({
       }
       return session;
     },
+
+    // ── Redirect — ensure relative paths and safe same-host redirects ─────
+    async redirect({ url, baseUrl }: { url: string; baseUrl: string }) {
+      if (url.startsWith('/')) return url;
+      try {
+        const urlObj = new URL(url);
+        // If pointing to localhost/127.0.0.1, convert to relative path so it stays on the live hosted domain
+        if (urlObj.hostname === 'localhost' || urlObj.hostname === '127.0.0.1') {
+          return `${urlObj.pathname}${urlObj.search}`;
+        }
+        if (baseUrl && urlObj.origin === new URL(baseUrl).origin) {
+          return url;
+        }
+        return `${urlObj.pathname}${urlObj.search}`;
+      } catch {
+        return '/login';
+      }
+    },
   },
 
   pages: { signIn: '/login' },

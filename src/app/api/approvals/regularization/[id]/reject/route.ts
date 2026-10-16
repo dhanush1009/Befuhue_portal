@@ -7,6 +7,7 @@ import { createAuditLog } from '@/lib/audit';
 import { createNotification } from '@/lib/notifications';
 import { sendEmail, EMAIL_FROM } from '@/lib/mailer';
 import { regularizationRejectedHtml, regularizationRejectedSubject } from '@/lib/emails/regularization';
+import { getBaseUrl } from '@/lib/baseUrl';
 
 const schema = z.object({
   remarks: z.string().min(5, 'Rejection reason must be at least 5 characters'),
@@ -60,7 +61,7 @@ export async function PATCH(
     remarks:    { before: null, after: remarks },
   });
 
-  const loginUrl       = process.env.NEXTAUTH_URL ?? 'http://localhost:3000';
+  const loginUrl       = getBaseUrl(req);
   const isFinalRejection = isAdmin;
 
   // Fetch rejector name for email

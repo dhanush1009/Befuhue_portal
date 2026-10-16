@@ -1,6 +1,7 @@
 import { randomBytes, createHash } from 'crypto';
 import { prisma } from '@/lib/prisma';
 import { generateRawToken, hashToken, tokenPrefixFor } from '@/lib/apiTokens';
+import { getBaseUrl } from '@/lib/baseUrl';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -11,7 +12,7 @@ export const AUTH_CODE_TTL_SECONDS     = 60 * 5;             // 5 minutes
 // ── Origin ────────────────────────────────────────────────────────────────────
 
 export function getOrigin(): string {
-  return process.env.NEXTAUTH_URL ?? process.env.AUTH_URL ?? 'https://desk.your-domain.example';
+  return getBaseUrl();
 }
 
 // ── PKCE ──────────────────────────────────────────────────────────────────────

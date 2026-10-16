@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/requireAuth';
+import { getBaseUrl } from '@/lib/baseUrl';
 import crypto from 'crypto';
 
 export async function POST(
@@ -36,10 +37,7 @@ export async function POST(
       },
     });
 
-    const origin =
-      process.env.NEXTAUTH_URL ||
-      req.nextUrl.origin ||
-      'http://localhost:3000';
+    const origin = getBaseUrl(req);
     const shareUrl = `${origin}/reports/shared/${token}`;
 
     return NextResponse.json({ data: { shareUrl, expiresAt } });

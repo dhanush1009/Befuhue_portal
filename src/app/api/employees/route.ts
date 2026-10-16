@@ -7,6 +7,7 @@ import { createAuditLog } from '@/lib/audit';
 import { sendEmail } from '@/lib/mailer';
 import { welcomeEmployeeEmailHtml, welcomeEmployeeEmailSubject } from '@/lib/emails/welcomeEmployee';
 import { generateStrongPassword, hashPassword, checkPasswordStrength } from '@/lib/passwordUtils';
+import { getBaseUrl } from '@/lib/baseUrl';
 
 const EMPLOYEE_SELECT = {
   id: true, name: true, email: true, role: true,
@@ -142,7 +143,7 @@ export async function POST(req: NextRequest) {
 
     // Welcome email with credentials (fire-and-forget)
     if (consoleAccess && plainPassword) {
-      const loginUrl = process.env.NEXTAUTH_URL ?? 'http://localhost:3000';
+      const loginUrl = getBaseUrl(req);
       try {
         await sendEmail({
           to:      email,

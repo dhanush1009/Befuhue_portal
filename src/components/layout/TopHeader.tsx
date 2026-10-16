@@ -199,7 +199,15 @@ function UserDropdown({ name, role, avatarUrl, initials, canPreview }: UserDropd
 
           <div className="border-t border-gray-100 dark:border-violet-900/30 mt-1 pt-1">
             <button
-              onClick={() => { setOpen(false); signOut({ callbackUrl: '/login', redirect: true }); }}
+              onClick={async () => {
+                setOpen(false);
+                try {
+                  await signOut({ redirect: false });
+                } catch {
+                  // Ignore network errors on session clear
+                }
+                window.location.href = '/login';
+              }}
               className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-status-absent hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors duration-150"
             >
               <LogOut className="w-4 h-4" />

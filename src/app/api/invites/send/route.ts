@@ -6,6 +6,7 @@ import { createAuditLog } from '@/lib/audit';
 import { sendEmail } from '@/lib/mailer';
 import { createInvitePayload } from '@/lib/invites';
 import { inviteEmployeeEmailHtml, inviteEmployeeEmailSubject } from '@/lib/emails/inviteEmployee';
+import { getBaseUrl } from '@/lib/baseUrl';
 import type { Role } from '@prisma/client';
 
 const sendInviteSchema = z.object({
@@ -20,38 +21,6 @@ const sendInviteSchema = z.object({
   joiningDate:    z.string().optional().nullable(),
   managerId:      z.string().optional().nullable(),
 });
-
-function getBaseUrl(req: NextRequest): string {
-  // 1. Explicitly configured production APP_URL
-  if (process.env.APP_URL) {
-    return process.env.APP_URL.replace(/\/+$/, '');
-  }
-
-  // 2. If NEXTAUTH_URL is configured with a production domain (not localhost)
-  if (
-    process.env.NEXTAUTH_URL &&
-    !process.env.NEXTAUTH_URL.includes('localhost') &&
-    !process.env.NEXTAUTH_URL.includes('127.0.0.1')
-  ) {
-    return process.env.NEXTAUTH_URL.replace(/\/+$/, '');
-  }
-
-  // 3. Vercel automatic deployment URL
-  if (process.env.VERCEL_URL) {
-    return `https://${process.env.VERCEL_URL.replace(/\/+$/, '')}`;
-  }
-
-  // 4. Derive dynamically from the actual incoming request headers (detects live domain on any host)
-  const forwardedHost = req.headers.get('x-forwarded-host');
-  const host = forwardedHost || req.headers.get('host');
-  if (host && !host.includes('localhost') && !host.includes('127.0.0.1')) {
-    const proto = req.headers.get('x-forwarded-proto') || 'https';
-    return `${proto}://${host}`.replace(/\/+$/, '');
-  }
-
-  // 5. Fallback for local development
-  return (process.env.NEXTAUTH_URL || req.nextUrl?.origin || 'http://localhost:3000').replace(/\/+$/, '');
-}
 
 export async function POST(req: NextRequest) {
   const { user, error } = await requireAuth();

@@ -14,6 +14,7 @@ import {
   regularizationSubmittedHtml,
   regularizationSubmittedSubject,
 } from '@/lib/emails/regularization';
+import { getBaseUrl } from '@/lib/baseUrl';
 
 const createSchema = z.object({
   date:               z.string().min(1),
@@ -82,7 +83,7 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  const loginUrl = process.env.NEXTAUTH_URL ?? 'http://localhost:3000';
+  const loginUrl = getBaseUrl(req);
 
   // Notify reviewer (if assigned)
   if (reviewerId) {
