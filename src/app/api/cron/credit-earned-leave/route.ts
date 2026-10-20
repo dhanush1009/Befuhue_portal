@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { creditMonthlyEarnedLeave } from '@/lib/payroll/creditEarnedLeave';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * GET /api/cron/credit-earned-leave
  * Called by a scheduler on the 1st of every month.

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { createNotification } from '@/lib/notifications';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * GET /api/cron/due-reminders
  *

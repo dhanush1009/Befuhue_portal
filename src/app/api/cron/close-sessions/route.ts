@@ -3,6 +3,8 @@ import { prisma } from '@/lib/prisma';
 import { getISTMidnight } from '@/lib/attendance';
 import { differenceInMinutes } from 'date-fns';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * GET /api/cron/close-sessions
  *

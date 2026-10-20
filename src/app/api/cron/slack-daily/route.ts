@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { postDailyCelebrations } from '@/lib/slack/mirror';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * GET /api/cron/slack-daily
  *

@@ -3,6 +3,7 @@ import { getGraph, isMetaConfigured, refreshConnectionIfNeeded } from '@/lib/met
 import { syncEnabledAccounts } from '@/lib/meta/sync';
 import { todayKey } from '@/lib/meta/scope';
 
+export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
 /**
@@ -16,13 +17,14 @@ export async function GET(req: NextRequest) {
     const given = bearer ?? req.headers.get('x-cron-secret') ?? req.nextUrl.searchParams.get('secret');
     if (given !== secret) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-  // Renew the connected Meta login first if it is close to expiring, so it never lapses unnoticed.
-  const renewal = await refreshConnectionIfNeeded();
-  if (!(await isMetaConfigured())) return NextResponse.json({ skipped: 'Meta is not connected', renewal });
 
   try {
+    // Renew the connected Meta login first if it is close to expiring, so it never lapses unnoticed.
+    const renewal = await refreshConnectionIfNeeded();
+    if (!(await isMetaConfigured())) return NextResponse.json({ skipped: 'Meta is not connected', renewal });
+
     return NextResponse.json({ ...(await syncEnabledAccounts(await getGraph(), { today: todayKey() })), renewal });
-  } catch {
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  } catch (err) {
+    return NextResponse.json({ error: (err as Error)?.message ?? 'Internal server error' }, { status: 500 });
   }
 }

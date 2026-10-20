@@ -3,6 +3,8 @@ import { prisma } from '@/lib/prisma';
 import { createNotification } from '@/lib/notifications';
 import { postDailyCelebrations } from '@/lib/slack/mirror';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * GET /api/cron/offer-reminders
  *
