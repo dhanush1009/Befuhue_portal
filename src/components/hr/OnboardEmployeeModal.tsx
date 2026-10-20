@@ -211,7 +211,12 @@ export function OnboardEmployeeModal({ onClose }: OnboardEmployeeModalProps) {
               <div className="space-y-4">
                 <div>
                   <label className={LABEL}>Designation *</label>
-                  <input {...register('designation')} className={IC} placeholder="Software Engineer" />
+                  <input {...register('designation')} list="onboard-designation-suggestions" className={IC} placeholder="e.g. Junior Video Editor" />
+                  <datalist id="onboard-designation-suggestions">
+                    {DEPARTMENTS.map((dept) => (
+                      <option key={dept} value={dept} />
+                    ))}
+                  </datalist>
                   {errors.designation && <p className="text-xs text-status-absent mt-1">{errors.designation.message}</p>}
                 </div>
                 <div className="grid grid-cols-2 gap-4">

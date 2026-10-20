@@ -352,9 +352,15 @@ export function AddPeopleModal({ onClose, onSuccess }: AddPeopleModalProps) {
                   <label className={labelClass}>Designation *</label>
                   <input
                     {...register('designation')}
-                    placeholder="Frontend Developer"
+                    list="designation-suggestions"
+                    placeholder="e.g. Junior Video Editor"
                     className={cn(inputClass, errors.designation && 'border-rose-400')}
                   />
+                  <datalist id="designation-suggestions">
+                    {DEPARTMENTS.map((dept) => (
+                      <option key={dept} value={dept} />
+                    ))}
+                  </datalist>
                   {errors.designation && (
                     <p className="text-[11px] text-rose-500 mt-1">{errors.designation.message}</p>
                   )}

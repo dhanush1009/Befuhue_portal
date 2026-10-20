@@ -47,6 +47,16 @@ export const PRIORITY_LEVELS = [
 ] as const;
 
 export const DEPARTMENTS = [
+  'Junior Video Editor',
+  'Senior Video Editor',
+  'Creative Editor',
+  'Content Writer',
+  'Graphic Designer',
+  'SEO Expert',
+  'Meta Manager',
+  'Performance Marketer',
+  'SEO Executive',
+  'Sales Executive',
   'Engineering',
   'Design',
   'Product',
