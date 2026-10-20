@@ -292,11 +292,6 @@ export function TaskCard({ task, isDragging = false, justDropped = false, isDark
                 {task._count!.comments}
               </span>
             )}
-            {task.amount != null && (
-              <span className="text-[10px] font-mono font-bold text-brand bg-brand/10 px-1.5 py-0.5 rounded border border-brand/20">
-                ₹{task.amount.toLocaleString('en-IN')}
-              </span>
-            )}
           </div>
         </div>
 
