@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/requireAuth';
-import { uploadToS3, deleteFromS3, extractS3Key } from '@/lib/s3';
+import { uploadToS3, deleteFromS3, extractS3Key, isS3Configured } from '@/lib/s3';
 
 const ALLOWED   = ['image/jpeg', 'image/png', 'image/webp'];
 const MAX_BYTES = 2 * 1024 * 1024; // 2 MB (already cropped + compressed)
@@ -26,41 +26,50 @@ export async function POST(req: NextRequest) {
 
   try {
     const buffer = Buffer.from(await file.arrayBuffer());
-    const key    = `avatars/${user.id}/avatar-${Date.now()}.jpg`;
+    let avatarUrl: string;
+    let avatarData: string | null = null;
 
-    // Upload new avatar to S3
-    const avatarUrl = await uploadToS3(key, buffer, 'image/jpeg');
+    if (isS3Configured()) {
+      try {
+        const key = `avatars/${user.id}/avatar-${Date.now()}.jpg`;
+        avatarUrl = await uploadToS3(key, buffer, 'image/jpeg');
 
-    // Delete old avatar from S3 (non-fatal)
-    const current = await prisma.user.findUnique({
-      where:  { id: user.id },
-      select: { avatarUrl: true },
-    });
-    if (current?.avatarUrl) {
-      const oldKey = extractS3Key(current.avatarUrl);
-      if (oldKey) {
-        await deleteFromS3(oldKey).catch((e: unknown) => {
-          console.warn('[avatar] Failed to delete old avatar from S3:', e);
+        // Delete old avatar from S3 (non-fatal)
+        const current = await prisma.user.findUnique({
+          where:  { id: user.id },
+          select: { avatarUrl: true },
         });
+        if (current?.avatarUrl) {
+          const oldKey = extractS3Key(current.avatarUrl);
+          if (oldKey) {
+            await deleteFromS3(oldKey).catch((e: unknown) => {
+              console.warn('[avatar] Failed to delete old avatar from S3:', e);
+            });
+          }
+        }
+      } catch (s3Err) {
+        console.warn('[avatar POST] S3 upload failed, storing image in database:', s3Err);
+        const mimeType = file.type || 'image/jpeg';
+        avatarData = `data:${mimeType};base64,${buffer.toString('base64')}`;
+        avatarUrl = `/api/avatar/${user.id}?t=${Date.now()}`;
       }
+    } else {
+      // S3 is optional: store binary in avatarData and use the lightweight /api/avatar endpoint
+      const mimeType = file.type || 'image/jpeg';
+      avatarData = `data:${mimeType};base64,${buffer.toString('base64')}`;
+      avatarUrl = `/api/avatar/${user.id}?t=${Date.now()}`;
     }
 
-    // Persist new URL to DB
+    // Persist new URL and data to DB
     await prisma.user.update({
       where: { id: user.id },
-      data:  { avatarUrl },
+      data:  { avatarUrl, avatarData },
     });
 
     return NextResponse.json({ avatarUrl }, { status: 200 });
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Upload failed.';
     console.error('[avatar POST]', err);
-    if (msg.includes('not configured') || msg.includes('not set')) {
-      return NextResponse.json(
-        { error: 'File storage is not configured. Contact your administrator.' },
-        { status: 503 },
-      );
-    }
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
@@ -86,10 +95,10 @@ export async function DELETE(_req: NextRequest) {
       }
     }
 
-    // Clear avatarUrl in DB
+    // Clear avatarUrl and avatarData in DB
     await prisma.user.update({
       where: { id: user.id },
-      data:  { avatarUrl: null },
+      data:  { avatarUrl: null, avatarData: null },
     });
 
     return NextResponse.json({ success: true, avatarUrl: null });

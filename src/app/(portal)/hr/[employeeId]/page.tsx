@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, CalendarDays, Users, CheckSquare, Calendar, ClipboardList, Pencil, MoreVertical, UserX, KeyRound } from 'lucide-react';
@@ -22,6 +22,7 @@ import { SalaryTab } from '@/components/hr/SalaryTab';
 import { EmployeeDetailsForm } from '@/components/details/EmployeeDetailsForm';
 import { CareerTimeline } from '@/components/hr/CareerTimeline';
 import { useQueryClient } from '@tanstack/react-query';
+import { useSession } from 'next-auth/react';
 import { toast } from 'sonner';
 
 type Tab = 'personal' | 'details' | 'career' | 'work' | 'documents' | 'leaves' | 'tasks' | 'salary' | 'appraisals';
@@ -126,14 +127,20 @@ interface EmployeeProfilePageProps {
 export default function EmployeeProfilePage({ params }: EmployeeProfilePageProps) {
   const router = useRouter();
   const { user, isAdmin } = useAuth();
+  const { update: updateSession } = useSession();
   const [activeTab,      setActiveTab]      = useState<Tab>('personal');
   const [showEdit,          setShowEdit]          = useState(false);
   const [showDeactivate,    setShowDeactivate]    = useState(false);
   const [showResetPassword, setShowResetPassword] = useState(false);
   const [overflowOpen,      setOverflowOpen]      = useState(false);
+  const [otherImgError,     setOtherImgError]     = useState(false);
   const { visited, visit } = useLazyTabs('personal');
 
   const { data: employee, isLoading } = useEmployee(params.employeeId);
+
+  useEffect(() => {
+    setOtherImgError(false);
+  }, [employee?.avatarUrl]);
   const deactivate = useDeactivateEmployee();
   const queryClient = useQueryClient();
 
@@ -194,13 +201,14 @@ export default function EmployeeProfilePage({ params }: EmployeeProfilePageProps
                 onUploadComplete={(url) => {
                   queryClient.invalidateQueries({ queryKey: ['employees', params.employeeId] });
                   queryClient.invalidateQueries({ queryKey: ['employees'] });
-                  void url;
+                  queryClient.invalidateQueries({ queryKey: ['myProfile'] });
+                  void updateSession({ avatarUrl: url });
                 }}
               />
             ) : (
               <div className={cn('w-20 h-20 rounded-full bg-brand-light text-brand flex items-center justify-center text-2xl font-semibold overflow-hidden border-2 border-white dark:border-violet-900/40 shadow-sm', !isActive && 'grayscale')}>
-                {employee.avatarUrl ? (
-                  <img src={employee.avatarUrl} alt={employee.name} className="w-full h-full object-cover" />
+                {employee.avatarUrl && !otherImgError ? (
+                  <img src={employee.avatarUrl} alt={employee.name} className="w-full h-full object-cover" onError={() => setOtherImgError(true)} />
                 ) : (
                   getInitials(employee.name)
                 )}

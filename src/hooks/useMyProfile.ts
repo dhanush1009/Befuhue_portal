@@ -53,6 +53,9 @@ export function useMyProfile() {
     );
     // 2. Patch the NextAuth session token so TopHeader + Sidebar re-render immediately
     void updateSession({ avatarUrl: newUrl });
+    // 3. Invalidate related queries so all pages across the portal pick up the new photo
+    void queryClient.invalidateQueries({ queryKey: ['myProfile'] });
+    void queryClient.invalidateQueries({ queryKey: ['employees'] });
   }
 
   return { profile, updateProfile, updateAvatarCache };

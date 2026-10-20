@@ -25,7 +25,7 @@ export type CreateEmployeeInput = z.infer<typeof createEmployeeSchema>;
 export const updateOwnProfileSchema = z.object({
   name:                     z.string().min(1).max(100).optional(),
   phone:                    z.string().max(20).optional().nullable(),
-  avatarUrl:                z.string().url().optional().nullable(),
+  avatarUrl:                z.string().optional().nullable(),
   fatherName:               z.string().max(100).optional().nullable(),
   motherName:               z.string().max(100).optional().nullable(),
   parentsPhone:             z.string().max(20).optional().nullable(),
@@ -37,7 +37,7 @@ export const updateEmployeeSchema = z.object({
   name:           z.string().min(1).max(100).optional(),
   email:          z.string().email().optional(),
   phone:          z.string().max(20).optional().nullable(),
-  avatarUrl:      z.string().url().optional().nullable(),
+  avatarUrl:      z.string().optional().nullable(),
   department:     z.string().max(100).optional().nullable(),
   designation:    z.string().max(100).optional().nullable(),
   managerId:      z.string().optional().nullable(),

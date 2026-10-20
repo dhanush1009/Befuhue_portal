@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState, useCallback } from 'react';
+import { useRef, useState, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import Cropper from 'react-easy-crop';
 import type { Area } from 'react-easy-crop';
@@ -54,6 +54,10 @@ export function AvatarUpload({ currentAvatarUrl, userName, size = 'md', onUpload
   const [croppedAreaPixels,  setCroppedAreaPixels]  = useState<Area | null>(null);
   const [uploadError,        setUploadError]        = useState('');
   const [imgError,           setImgError]           = useState(false);
+
+  useEffect(() => {
+    setImgError(false);
+  }, [currentAvatarUrl]);
 
   const onCropComplete = useCallback((_: Area, pixels: Area) => {
     setCroppedAreaPixels(pixels);
@@ -115,6 +119,7 @@ export function AvatarUpload({ currentAvatarUrl, userName, size = 'md', onUpload
       if (!res.ok) throw new Error(json.error ?? 'Upload failed');
 
       onUploadComplete(json.avatarUrl ?? null);
+      setImgError(false);
       toast.success('Profile photo updated.');
       setState('idle');
     } catch (err) {

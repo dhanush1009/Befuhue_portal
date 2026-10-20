@@ -134,8 +134,13 @@ interface UserDropdownProps {
 
 function UserDropdown({ name, role, avatarUrl, initials, canPreview }: UserDropdownProps) {
   const [open, setOpen] = useState(false);
+  const [imgError, setImgError] = useState(false);
   const setPickerOpen = useViewAsStore((s) => s.setPickerOpen);
   const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setImgError(false);
+  }, [avatarUrl]);
 
   useEffect(() => {
     function onClickOutside(e: MouseEvent) {
@@ -156,8 +161,8 @@ function UserDropdown({ name, role, avatarUrl, initials, canPreview }: UserDropd
           <span className="text-xs text-gray-400 dark:text-violet-300/60 leading-tight capitalize">{role.toLowerCase()}</span>
         </div>
         <div className="w-8 h-8 rounded-full bg-brand-light dark:bg-brand/20 text-brand flex items-center justify-center text-xs font-semibold overflow-hidden border border-brand/20 shrink-0">
-          {avatarUrl
-            ? <img src={avatarUrl} alt={name} className="w-full h-full object-cover" />
+          {avatarUrl && !imgError
+            ? <img src={avatarUrl} alt={name} className="w-full h-full object-cover" onError={() => setImgError(true)} />
             : initials}
         </div>
         <ChevronDown className={cn('w-3.5 h-3.5 text-gray-400 dark:text-violet-300/50 transition-transform duration-150', open && 'rotate-180')} />

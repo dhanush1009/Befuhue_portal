@@ -22,6 +22,7 @@ import { useUIStore, type Theme } from '@/store/useUIStore';
 import { LEAVE_TYPES, LEAVE_ALLOWANCES } from '@/lib/constants';
 import { useCompanySettings, useUpdateCompanySettings } from '@/hooks/useCompanySettings';
 import { SlackCard, SlackMyToggle } from '@/components/settings/SlackCard';
+import { useSession } from 'next-auth/react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -65,12 +66,13 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
 
 function ProfileTab() {
   const { user } = useAuth();
+  const { update: updateSession } = useSession();
   const { data: employee, isLoading } = useEmployee(user?.id ?? null);
   const update = useUpdateEmployee(user?.id ?? '');
   const queryClient = useQueryClient();
   const [avatarUrl, setAvatarUrl] = useState<string | null | undefined>(undefined);
 
-  const { register, handleSubmit, formState: { errors, isDirty } } = useForm<UpdateOwnProfileInput>({
+  const { register, handleSubmit, setValue, formState: { errors, isDirty } } = useForm<UpdateOwnProfileInput>({
     resolver: zodResolver(updateOwnProfileSchema),
     values: { name: employee?.name ?? '', phone: employee?.phone ?? '', avatarUrl: employee?.avatarUrl ?? '' },
   });
@@ -91,7 +93,11 @@ function ProfileTab() {
             size="lg"
             onUploadComplete={(url) => {
               setAvatarUrl(url);
+              setValue('avatarUrl', url ?? '', { shouldDirty: false });
               queryClient.invalidateQueries({ queryKey: ['employees', user?.id] });
+              queryClient.invalidateQueries({ queryKey: ['employees'] });
+              queryClient.invalidateQueries({ queryKey: ['myProfile'] });
+              void updateSession({ avatarUrl: url });
             }}
           />
           <div>

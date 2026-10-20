@@ -26,6 +26,15 @@ function getBucket(): string {
   return bucket;
 }
 
+export function isS3Configured(): boolean {
+  return Boolean(
+    process.env.AWS_REGION &&
+    process.env.AWS_ACCESS_KEY_ID &&
+    process.env.AWS_SECRET_ACCESS_KEY &&
+    process.env.AWS_S3_BUCKET,
+  );
+}
+
 /** Build the public URL for an S3 object. Uses CDN URL if configured. */
 export function getS3PublicUrl(key: string): string {
   const cdn    = process.env.AWS_S3_PUBLIC_URL;
@@ -67,6 +76,7 @@ export async function deleteFromS3(key: string): Promise<void> {
 
 /** Extract the S3 key from a full S3/CDN URL. Returns null if not parseable. */
 export function extractS3Key(url: string): string | null {
+  if (!url || typeof url !== 'string' || url.startsWith('data:')) return null;
   try {
     const cdn    = process.env.AWS_S3_PUBLIC_URL;
     const bucket = process.env.AWS_S3_BUCKET;

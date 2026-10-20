@@ -82,13 +82,19 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.role               = user.role        as Role;
         token.department         = user.department  as string | null;
         token.designation        = user.designation as string | null;
-        token.avatarUrl          = user.avatarUrl   as string | null;
+        token.avatarUrl          = user.avatarUrl?.startsWith('data:') ? `/api/avatar/${user.id}` : (user.avatarUrl as string | null);
         token.managerId          = user.managerId   as string | null;
         token.mustChangePassword = user.mustChangePassword as boolean | undefined;
       }
       // Handle client-side session.update() calls — merge patched fields into token
       if (trigger === 'update' && session) {
-        if ('avatarUrl' in session) token.avatarUrl = session.avatarUrl as string | null;
+        if ('avatarUrl' in session) {
+          const raw = session.avatarUrl as string | null;
+          token.avatarUrl = raw?.startsWith('data:') ? `/api/avatar/${token.id}` : raw;
+        }
+      }
+      if (token.avatarUrl?.startsWith('data:')) {
+        token.avatarUrl = token.id ? `/api/avatar/${token.id}` : null;
       }
       return token;
     },

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { getInitials, cn } from '@/lib/utils';
 
 interface UserAvatarProps {
@@ -36,6 +36,10 @@ function nameColor(name: string | null | undefined): string {
 export function UserAvatar({ name, avatarUrl, size = 'md', className, loading = false }: UserAvatarProps) {
   const [imgError, setImgError] = useState(false);
   const { container } = SIZE_MAP[size];
+
+  useEffect(() => {
+    setImgError(false);
+  }, [avatarUrl]);
 
   if (loading) {
     return (

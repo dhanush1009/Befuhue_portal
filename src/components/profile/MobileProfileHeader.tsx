@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { cn, getInitials } from '@/lib/utils';
 import { LEAVE_TYPES } from '@/lib/constants';
 import type { MyProfile, LeaveBalanceEntry } from '@/types/profile';
@@ -14,7 +15,12 @@ interface MobileProfileHeaderProps {
 }
 
 export function MobileProfileHeader({ user, completeness }: MobileProfileHeaderProps) {
+  const [imgError, setImgError] = useState(false);
   const { percentage } = completeness;
+
+  useEffect(() => {
+    setImgError(false);
+  }, [user.avatarUrl]);
 
   const barColor =
     percentage === 100 ? 'bg-green-500' :
@@ -35,8 +41,8 @@ export function MobileProfileHeader({ user, completeness }: MobileProfileHeaderP
       <div className="flex items-center gap-4">
         {/* Avatar */}
         <div className="w-16 h-16 rounded-full overflow-hidden bg-violet-100 dark:bg-violet-900/40 flex items-center justify-center text-lg font-semibold text-violet-700 dark:text-violet-300 shrink-0">
-          {user.avatarUrl
-            ? <img src={user.avatarUrl} alt={user.name} className="w-full h-full object-cover" />
+          {user.avatarUrl && !imgError
+            ? <img src={user.avatarUrl} alt={user.name} className="w-full h-full object-cover" onError={() => setImgError(true)} />
             : getInitials(user.name)}
         </div>
 

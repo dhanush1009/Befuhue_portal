@@ -97,11 +97,16 @@ function Brand({ collapsed }: { collapsed: boolean }) {
 
 function UserCard({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: () => void }) {
   const { user } = useAuth();
+  const [imgError, setImgError] = useState(false);
   const name = (user?.name as string | undefined) ?? 'User';
   const avatarUrl = user?.avatarUrl as string | null | undefined;
   const subtitle = (user?.designation as string | null | undefined) ?? (user?.role as string | undefined)?.toLowerCase() ?? 'employee';
   const pathname = usePathname();
   const active = isActivePath(pathname, '/profile');
+
+  useEffect(() => {
+    setImgError(false);
+  }, [avatarUrl]);
 
   return (
     <Link
@@ -115,7 +120,7 @@ function UserCard({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: 
       )}
     >
       <div className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-brand/20 bg-brand-light text-xs font-semibold text-brand">
-        {avatarUrl ? <img src={avatarUrl} alt={name} className="size-full object-cover" /> : getInitials(name)}
+        {avatarUrl && !imgError ? <img src={avatarUrl} alt={name} className="size-full object-cover" onError={() => setImgError(true)} /> : getInitials(name)}
       </div>
       {!collapsed && (
         <>

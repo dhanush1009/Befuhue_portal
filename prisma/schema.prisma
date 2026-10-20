@@ -23,6 +23,7 @@ model User {
   designation    String?
   phone          String?
   avatarUrl      String?
+  avatarData     String?        // Base64-encoded image data when external storage is not configured
   managerId      String?
   isActive       Boolean        @default(true)
   deletedAt      DateTime?
