@@ -146,8 +146,9 @@ maintaining automation for it.
 
 Four endpoints (`close-sessions`, `credit-earned-leave`, `due-reminders`, and
 `process-lunch-breaks`) need something to call them on a schedule, protected by `CRON_SECRET`.
-The lunch-break processor runs every minute so task timers resume at their persisted scheduled
-resume time even when the employee's browser is closed. On the EC2 host:
+The persisted lunch interval remains exactly 60 minutes and task elapsed-time calculations resume
+at its server-side scheduled end. The processor finalizes the database status on its next run or
+the next authenticated portal request. On the EC2 host:
 
 ```bash
 crontab -e
