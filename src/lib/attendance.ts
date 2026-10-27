@@ -99,13 +99,9 @@ export function calculateSessionWorkedMinutes(
   session: AttendanceSession,
   endAt: Date = new Date(),
 ): number {
-  const elapsed = Math.max(0, differenceInMinutes(endAt, new Date(session.clockIn)));
-  const paused = (session.lunchBreaks ?? []).reduce((total, lunchBreak) => {
-    const start = Math.max(new Date(session.clockIn).getTime(), new Date(lunchBreak.startAt).getTime());
-    const end = Math.min(endAt.getTime(), new Date(lunchBreak.scheduledEndAt).getTime());
-    return total + Math.max(0, differenceInMinutes(new Date(end), new Date(start)));
-  }, 0);
-  return Math.max(0, elapsed - paused);
+  // Lunch breaks pause task timers only. Attendance remains continuous from
+  // clock-in through clock-out, including the lunch interval.
+  return Math.max(0, differenceInMinutes(endAt, new Date(session.clockIn)));
 }
 
 /** Format minutes to "Xh Ym" display string. */

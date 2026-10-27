@@ -129,6 +129,7 @@ model LunchBreak {
   startAt             DateTime
   scheduledEndAt      DateTime
   resumedAt           DateTime?
+  affectedTaskIds     String[]          @default([])
   status              LunchBreakStatus   @default(ACTIVE)
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt

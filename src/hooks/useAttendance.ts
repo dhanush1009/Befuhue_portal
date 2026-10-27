@@ -35,6 +35,8 @@ export function useLunchBreak() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['attendance'] });
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       toast.success('Lunch break started. Your task timers are paused for 60 minutes.');
     },
     onError: (err: Error) => toast.error(err.message),

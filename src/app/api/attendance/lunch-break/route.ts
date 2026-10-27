@@ -63,7 +63,6 @@ export async function POST() {
       const activeTasks = await tx.task.findMany({
         where: {
           status: 'IN_PROGRESS',
-          dueDate: { not: null },
           deletedAt: { isSet: false },
           OR: [
             { assigneeId: user.id },
@@ -73,14 +72,21 @@ export async function POST() {
         select: { id: true, dueDate: true },
       });
 
-      await Promise.all(activeTasks.map((task) =>
-        tx.task.update({
-          where: { id: task.id },
-          data: { dueDate: new Date(task.dueDate!.getTime() + 60 * 60 * 1000) },
-        }),
-      ));
+      await tx.lunchBreak.update({
+        where: { id: created.id },
+        data: { affectedTaskIds: activeTasks.map((task) => task.id) },
+      });
 
-      return created;
+      await Promise.all(activeTasks
+        .filter((task): task is typeof task & { dueDate: Date } => task.dueDate !== null)
+        .map((task) =>
+          tx.task.update({
+            where: { id: task.id },
+            data: { dueDate: new Date(task.dueDate.getTime() + 60 * 60 * 1000) },
+          }),
+        ));
+
+      return tx.lunchBreak.findUniqueOrThrow({ where: { id: created.id } });
     });
 
     return NextResponse.json({ data: lunchBreak, alreadyActive: false }, { status: 201 });

@@ -144,8 +144,10 @@ maintaining automation for it.
 
 ## 8. Cron jobs
 
-Three endpoints (`close-sessions`, `credit-earned-leave`, `due-reminders`) need something to call
-them on a schedule, protected by `CRON_SECRET`. On the EC2 host:
+Four endpoints (`close-sessions`, `credit-earned-leave`, `due-reminders`, and
+`process-lunch-breaks`) need something to call them on a schedule, protected by `CRON_SECRET`.
+The lunch-break processor runs every minute so task timers resume at their persisted scheduled
+resume time even when the employee's browser is closed. On the EC2 host:
 
 ```bash
 crontab -e
@@ -157,6 +159,8 @@ crontab -e
 5 0 1 * * curl -fsS -H "x-cron-secret: $CRON_SECRET" https://portal.your-domain.example/api/cron/credit-earned-leave
 # Send due-date reminders
 0 9 * * * curl -fsS -H "x-cron-secret: $CRON_SECRET" https://portal.your-domain.example/api/cron/due-reminders
+# Complete due lunch breaks and resume affected task timers
+* * * * * curl -fsS -H "x-cron-secret: $CRON_SECRET" https://portal.your-domain.example/api/cron/process-lunch-breaks
 ```
 `crontab -e` doesn't inherit shell variables, so either hardcode the actual secret value in place of
 `$CRON_SECRET` above, or `source ~/portal/.env` at the top of a wrapper script.

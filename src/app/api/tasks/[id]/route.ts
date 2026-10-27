@@ -93,10 +93,10 @@ const STATUS_LABEL: Record<string, string> = {
   PENDING: 'Pending', IN_REVIEW: 'In Review', OPEN: 'Open', VERIFIED: 'Verified',
 };
 
-async function getLunchPauseMinutes(userId: string, start: Date, end: Date): Promise<number> {
+async function getLunchPauseMinutes(taskId: string, start: Date, end: Date): Promise<number> {
   const breaks = await prisma.lunchBreak.findMany({
     where: {
-      userId,
+      affectedTaskIds: { has: taskId },
       startAt: { lt: end },
       scheduledEndAt: { gt: start },
     },
@@ -250,7 +250,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       const startTime = before.timerStartedAt ?? before.inProgressAt ?? before.createdAt;
       const elapsedMs = Math.max(0, timerStop.getTime() - new Date(startTime).getTime());
       const elapsedMinutes = Math.round(elapsedMs / 60000);
-      const lunchPauseMinutes = await getLunchPauseMinutes(user.id, new Date(startTime), timerStop);
+      const lunchPauseMinutes = await getLunchPauseMinutes(params.id, new Date(startTime), timerStop);
       const timeTakenMinutes = Math.max(1, elapsedMinutes - lunchPauseMinutes);
       updateData.timeTakenMinutes = timeTakenMinutes;
 
@@ -311,7 +311,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       const elapsedMs = Math.max(0, compDate.getTime() - new Date(startTime).getTime());
       const elapsedMinutes = Math.round(elapsedMs / 60000);
       const lunchPauseMinutes = before.timeTakenMinutes == null
-        ? await getLunchPauseMinutes(user.id, new Date(startTime), compDate)
+        ? await getLunchPauseMinutes(params.id, new Date(startTime), compDate)
         : 0;
       const timeTakenMinutes = before.timeTakenMinutes ?? Math.max(1, elapsedMinutes - lunchPauseMinutes);
       updateData.timeTakenMinutes = timeTakenMinutes;

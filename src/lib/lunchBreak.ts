@@ -14,20 +14,23 @@ export async function processDueLunchBreaks(userId?: string) {
 
   if (breaks.length === 0) return 0;
 
-  await Promise.all(breaks.map(async (lunchBreak) => {
-    const updated = await prisma.lunchBreak.updateMany({
-      where: { id: lunchBreak.id, status: 'ACTIVE' },
-      data: { status: 'COMPLETED', resumedAt: lunchBreak.scheduledEndAt },
-    });
-    if (updated.count > 0) {
-      await prisma.attendanceSession.update({
+  const processed = await Promise.all(breaks.map(async (lunchBreak) => {
+    return prisma.$transaction(async (tx) => {
+      const updated = await tx.lunchBreak.updateMany({
+        where: { id: lunchBreak.id, status: 'ACTIVE' },
+        data: { status: 'COMPLETED', resumedAt: lunchBreak.scheduledEndAt },
+      });
+      if (updated.count === 0) return 0;
+
+      await tx.attendanceSession.update({
         where: { id: lunchBreak.attendanceSessionId },
         data: { lunchBreakEndAt: lunchBreak.scheduledEndAt },
       });
-    }
+      return 1;
+    });
   }));
 
-  return breaks.length;
+  return processed.reduce<number>((total, count) => total + count, 0);
 }
 
 export function getLunchBreakEnd(startAt: Date) {

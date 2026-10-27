@@ -22,7 +22,7 @@ describe('Lunch break timing', () => {
     expect(end.getTime() - start.getTime()).toBe(60 * 60 * 1000);
   });
 
-  it('does not count the persisted lunch interval as worked time', () => {
+  it('keeps attendance continuous during the persisted lunch interval', () => {
     const clockIn = new Date('2026-10-27T05:30:00.000Z');
     const breakStart = new Date('2026-10-27T07:30:00.000Z');
     const breakEnd = new Date('2026-10-27T08:30:00.000Z');
@@ -37,6 +37,6 @@ describe('Lunch break timing', () => {
       createdAt: clockIn,
     };
 
-    expect(calculateSessionWorkedMinutes(session, new Date('2026-10-27T09:30:00.000Z'))).toBe(180);
+    expect(calculateSessionWorkedMinutes(session, new Date('2026-10-27T09:30:00.000Z'))).toBe(240);
   });
 });
