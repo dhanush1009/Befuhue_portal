@@ -1,11 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { format, differenceInMinutes } from 'date-fns';
-import { Clock, Loader2, CheckCircle, Globe2 } from 'lucide-react';
+import { format } from 'date-fns';
+import { Clock, Loader2, CheckCircle, Globe2, Coffee } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useClockIn, useClockOut, type TodayAttendanceResponse } from '@/hooks/useAttendance';
+import { useClockIn, useClockOut, useLunchBreak, type TodayAttendanceResponse } from '@/hooks/useAttendance';
 import {
+  calculateSessionWorkedMinutes,
   formatWorkedTime,
   getBreakMinutes,
 } from '@/lib/attendance';
@@ -81,6 +82,7 @@ export function ClockInCard({ todayData }: ClockInCardProps) {
 
   const clockInMutation  = useClockIn();
   const clockOutMutation = useClockOut();
+  const lunchBreakMutation = useLunchBreak();
 
   const sessions     = todayData?.sessions     ?? [];
   const isActive     = todayData?.isActive     ?? false;
@@ -88,6 +90,10 @@ export function ClockInCard({ todayData }: ClockInCardProps) {
   const firstClockIn = todayData?.firstClockIn ?? null;
   const lastClockOut = todayData?.lastClockOut ?? null;
   const isBusy       = clockInMutation.isPending || clockOutMutation.isPending;
+  const isLunchActive = Boolean(
+    todayData?.activeLunchBreak &&
+    new Date(todayData.activeLunchBreak.scheduledEndAt).getTime() > liveTime.getTime(),
+  );
   const isAnywhere   = todayData?.attendanceMode === 'ANYWHERE';
 
   // Live clock tick every second
@@ -103,15 +109,18 @@ export function ClockInCard({ todayData }: ClockInCardProps) {
       return;
     }
     const id = setInterval(() => {
-      const elapsed = differenceInMinutes(new Date(), new Date(activeSession.clockIn));
+      const elapsed = calculateSessionWorkedMinutes(activeSession, new Date());
       setLiveElapsed(formatWorkedTime(elapsed));
-      const completedMins = sessions
-        .filter((s) => s.clockOut !== null)
-        .reduce((acc, s) => acc + (s.durationMins ?? 0), 0);
-      setTotalWorkedDisplay(formatWorkedTime(completedMins + elapsed));
+      setTotalWorkedDisplay(formatWorkedTime(
+        sessions.reduce((total, session) => {
+          return total + (session.id === activeSession.id
+            ? calculateSessionWorkedMinutes(session, new Date())
+            : session.durationMins ?? 0);
+        }, 0),
+      ));
     }, 1000);
     return () => clearInterval(id);
-  }, [isActive, activeSession, sessions, todayData?.totalWorkedDisplay]);
+  }, [isActive, activeSession, sessions, todayData?.totalWorkedDisplay, todayData?.activeLunchBreak]);
 
   // Sync display when data refreshes
   useEffect(() => {
@@ -210,6 +219,25 @@ export function ClockInCard({ todayData }: ClockInCardProps) {
                 {isBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Clock className="w-4 h-4" />}
                 Clock Out
               </button>
+              <button
+                onClick={() => lunchBreakMutation.mutate()}
+                disabled={isBusy || lunchBreakMutation.isPending || isLunchActive}
+                className="flex items-center gap-2 px-6 py-3 bg-brand hover:bg-brand/90 text-white rounded-xl font-medium text-sm transition-colors duration-150 active:scale-[0.98] disabled:opacity-60 shadow-sm"
+              >
+                {lunchBreakMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Coffee className="w-4 h-4" />}
+                Lunch Break
+              </button>
+              {todayData?.activeLunchBreak && (
+                <div className="text-xs text-right text-brand dark:text-violet-200/80">
+                  <p className="font-semibold">{isLunchActive ? 'Lunch Break Active' : 'Lunch Break Ended'}</p>
+                  <p>
+                    Started {format(new Date(todayData.activeLunchBreak.startAt), 'h:mm a')}
+                    {isLunchActive && ` · ${formatWorkedTime(Math.ceil(
+                      (new Date(todayData.activeLunchBreak.scheduledEndAt).getTime() - liveTime.getTime()) / 60000,
+                    ))} remaining`}
+                  </p>
+                </div>
+              )}
               <p className="text-xs text-gray-400 dark:text-violet-300/45 text-right">
                 Current session: <span className="font-medium text-gray-700 dark:text-violet-200/70">{liveElapsed}</span>
               </p>

@@ -11,6 +11,13 @@ export interface AttendanceSession {
   durationMins: number | null;
   lunchBreakStartAt?: string | Date | null;
   lunchBreakEndAt?: string | Date | null;
+  lunchBreaks?: Array<{
+    id: string;
+    startAt: string | Date;
+    scheduledEndAt: string | Date;
+    resumedAt?: string | Date | null;
+    status: 'ACTIVE' | 'COMPLETED';
+  }>;
   note:         string | null;
   createdAt:    string;
 }

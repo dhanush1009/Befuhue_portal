@@ -66,6 +66,11 @@ export interface AttendanceSession {
   durationMins: number | null;
   lunchBreakStartAt?: string | Date | null;
   lunchBreakEndAt?: string | Date | null;
+  lunchBreaks?: Array<{
+    startAt: string | Date;
+    scheduledEndAt: string | Date;
+    status: 'ACTIVE' | 'COMPLETED';
+  }>;
   note:         string | null;
   createdAt:    string | Date;
 }
@@ -84,11 +89,23 @@ export function calculateCompletedMinutes(sessions: AttendanceSession[]): number
 export function calculateTotalWorkedMinutes(sessions: AttendanceSession[]): number {
   return sessions.reduce((total, session) => {
     if (!session.clockOut) {
-      const diff = differenceInMinutes(new Date(), new Date(session.clockIn));
-      return total + Math.max(0, diff);
+      return total + calculateSessionWorkedMinutes(session);
     }
-    return total + (session.durationMins ?? 0);
+    return total + calculateSessionWorkedMinutes(session, session.clockOut ? new Date(session.clockOut) : new Date());
   }, 0);
+}
+
+export function calculateSessionWorkedMinutes(
+  session: AttendanceSession,
+  endAt: Date = new Date(),
+): number {
+  const elapsed = Math.max(0, differenceInMinutes(endAt, new Date(session.clockIn)));
+  const paused = (session.lunchBreaks ?? []).reduce((total, lunchBreak) => {
+    const start = Math.max(new Date(session.clockIn).getTime(), new Date(lunchBreak.startAt).getTime());
+    const end = Math.min(endAt.getTime(), new Date(lunchBreak.scheduledEndAt).getTime());
+    return total + Math.max(0, differenceInMinutes(new Date(end), new Date(start)));
+  }, 0);
+  return Math.max(0, elapsed - paused);
 }
 
 /** Format minutes to "Xh Ym" display string. */

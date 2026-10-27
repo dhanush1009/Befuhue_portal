@@ -14,6 +14,31 @@ export interface TodayAttendanceResponse {
   totalWorkedDisplay: string;
   firstClockIn:       string | null;
   lastClockOut:       string | null;
+  activeLunchBreak: {
+    id: string;
+    startAt: string;
+    scheduledEndAt: string;
+    status: 'ACTIVE' | 'COMPLETED';
+  } | null;
+}
+
+export function useLunchBreak() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const res = await fetch('/api/attendance/lunch-break', { method: 'POST' });
+      if (!res.ok) {
+        const err = await res.json() as { error?: string };
+        throw new Error(err.error ?? 'Failed to start lunch break');
+      }
+      return res.json() as Promise<{ data: TodayAttendanceResponse['activeLunchBreak']; alreadyActive: boolean }>;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['attendance'] });
+      toast.success('Lunch break started. Your task timers are paused for 60 minutes.');
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
 }
 
 export function useTodayAttendance() {

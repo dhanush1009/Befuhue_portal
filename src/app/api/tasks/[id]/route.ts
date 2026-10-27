@@ -94,22 +94,18 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 async function getLunchPauseMinutes(userId: string, start: Date, end: Date): Promise<number> {
-  const sessions = await prisma.attendanceSession.findMany({
+  const breaks = await prisma.lunchBreak.findMany({
     where: {
-      attendance: { userId },
-      AND: [
-        { lunchBreakStartAt: { not: null } },
-        { lunchBreakEndAt: { not: null } },
-        { lunchBreakStartAt: { lt: end } },
-        { lunchBreakEndAt: { gt: start } },
-      ],
+      userId,
+      startAt: { lt: end },
+      scheduledEndAt: { gt: start },
     },
-    select: { lunchBreakStartAt: true, lunchBreakEndAt: true },
+    select: { startAt: true, scheduledEndAt: true },
   });
 
-  return sessions.reduce((total, session) => {
-    const pauseStart = Math.max(start.getTime(), session.lunchBreakStartAt!.getTime());
-    const pauseEnd = Math.min(end.getTime(), session.lunchBreakEndAt!.getTime());
+  return breaks.reduce((total, lunchBreak) => {
+    const pauseStart = Math.max(start.getTime(), lunchBreak.startAt.getTime());
+    const pauseEnd = Math.min(end.getTime(), lunchBreak.scheduledEndAt.getTime());
     return total + Math.max(0, Math.round((pauseEnd - pauseStart) / 60000));
   }, 0);
 }
@@ -254,9 +250,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       const startTime = before.timerStartedAt ?? before.inProgressAt ?? before.createdAt;
       const elapsedMs = Math.max(0, timerStop.getTime() - new Date(startTime).getTime());
       const elapsedMinutes = Math.round(elapsedMs / 60000);
-      const lunchPauseMinutes = before.assigneeId
-        ? await getLunchPauseMinutes(before.assigneeId, new Date(startTime), timerStop)
-        : 0;
+      const lunchPauseMinutes = await getLunchPauseMinutes(user.id, new Date(startTime), timerStop);
       const timeTakenMinutes = Math.max(1, elapsedMinutes - lunchPauseMinutes);
       updateData.timeTakenMinutes = timeTakenMinutes;
 
@@ -316,8 +310,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       const startTime = before.timerStartedAt ?? before.inProgressAt ?? before.createdAt;
       const elapsedMs = Math.max(0, compDate.getTime() - new Date(startTime).getTime());
       const elapsedMinutes = Math.round(elapsedMs / 60000);
-      const lunchPauseMinutes = before.timeTakenMinutes == null && before.assigneeId
-        ? await getLunchPauseMinutes(before.assigneeId, new Date(startTime), compDate)
+      const lunchPauseMinutes = before.timeTakenMinutes == null
+        ? await getLunchPauseMinutes(user.id, new Date(startTime), compDate)
         : 0;
       const timeTakenMinutes = before.timeTakenMinutes ?? Math.max(1, elapsedMinutes - lunchPauseMinutes);
       updateData.timeTakenMinutes = timeTakenMinutes;

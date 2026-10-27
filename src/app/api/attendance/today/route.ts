@@ -10,6 +10,7 @@ import {
   getLastClockOut,
   getISTMidnight,
 } from '@/lib/attendance';
+import { processDueLunchBreaks } from '@/lib/lunchBreak';
 
 export async function GET() {
   const { user, error } = await requireAuth();
@@ -18,12 +19,13 @@ export async function GET() {
   const todayIST = getISTMidnight();
 
   try {
+    await processDueLunchBreaks(user.id);
     const me = await prisma.user.findUnique({ where: { id: user.id }, select: { attendanceMode: true } });
     const attendanceMode = me?.attendanceMode ?? 'CLOCK_IN';
 
     const attendance = await prisma.attendance.findUnique({
       where:   { userId_date: { userId: user.id, date: todayIST } },
-      include: { sessions: { orderBy: { clockIn: 'asc' } } },
+      include: { sessions: { orderBy: { clockIn: 'asc' }, include: { lunchBreaks: true } } },
     });
 
     if (!attendance) {
@@ -37,6 +39,7 @@ export async function GET() {
         totalWorkedDisplay: '0m',
         firstClockIn: null,
         lastClockOut: null,
+        activeLunchBreak: null,
       });
     }
 
@@ -46,6 +49,9 @@ export async function GET() {
     const totalMins     = calculateCompletedMinutes(sessions);
     const firstIn       = getFirstClockIn(sessions);
     const lastOut       = getLastClockOut(sessions);
+    const activeLunchBreak = sessions
+      .flatMap((session) => session.lunchBreaks)
+      .sort((a, b) => b.startAt.getTime() - a.startAt.getTime())[0] ?? null;
 
     return NextResponse.json({
       attendanceMode,
@@ -57,6 +63,7 @@ export async function GET() {
       totalWorkedDisplay: formatWorkedTime(totalMins),
       firstClockIn:       firstIn?.toISOString() ?? null,
       lastClockOut:       lastOut?.toISOString() ?? null,
+      activeLunchBreak,
     });
   } catch {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
