@@ -103,6 +103,8 @@ model AttendanceSession {
   clockIn      DateTime
   clockOut     DateTime?
   durationMins Int?
+  lunchBreakStartAt DateTime?
+  lunchBreakEndAt   DateTime?
   note         String?    // e.g. "Auto closed at midnight"
   isRegularized   Boolean  @default(false)  // true if created via regularization
   regularizationId String?                  // link back to the regularization request

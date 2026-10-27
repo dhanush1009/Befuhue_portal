@@ -43,6 +43,17 @@ export function getISTDate(date: Date = new Date()): Date {
 
 /** Minimum session duration in minutes. Sessions shorter than this are rejected. */
 export const MIN_SESSION_MINUTES = 5;
+export const LUNCH_BREAK_MINUTES = 60;
+export const LUNCH_WINDOW_START_HOUR_IST = 12;
+export const LUNCH_WINDOW_END_HOUR_IST = 15;
+
+/** Lunch is inferred from the existing clock-out action during the configured IST window. */
+export function isLunchClockOut(date: Date = new Date()): boolean {
+  const istMs = date.getTime() + IST_OFFSET_MS;
+  const istDate = new Date(istMs);
+  const hour = istDate.getUTCHours();
+  return hour >= LUNCH_WINDOW_START_HOUR_IST && hour < LUNCH_WINDOW_END_HOUR_IST;
+}
 
 /** Minutes required to count as a full present day (8 hours). */
 export const PRESENT_THRESHOLD_MINUTES = 480;
@@ -53,6 +64,8 @@ export interface AttendanceSession {
   clockIn:      string | Date;
   clockOut:     string | Date | null;
   durationMins: number | null;
+  lunchBreakStartAt?: string | Date | null;
+  lunchBreakEndAt?: string | Date | null;
   note:         string | null;
   createdAt:    string | Date;
 }

@@ -93,6 +93,27 @@ const STATUS_LABEL: Record<string, string> = {
   PENDING: 'Pending', IN_REVIEW: 'In Review', OPEN: 'Open', VERIFIED: 'Verified',
 };
 
+async function getLunchPauseMinutes(userId: string, start: Date, end: Date): Promise<number> {
+  const sessions = await prisma.attendanceSession.findMany({
+    where: {
+      attendance: { userId },
+      AND: [
+        { lunchBreakStartAt: { not: null } },
+        { lunchBreakEndAt: { not: null } },
+        { lunchBreakStartAt: { lt: end } },
+        { lunchBreakEndAt: { gt: start } },
+      ],
+    },
+    select: { lunchBreakStartAt: true, lunchBreakEndAt: true },
+  });
+
+  return sessions.reduce((total, session) => {
+    const pauseStart = Math.max(start.getTime(), session.lunchBreakStartAt!.getTime());
+    const pauseEnd = Math.min(end.getTime(), session.lunchBreakEndAt!.getTime());
+    return total + Math.max(0, Math.round((pauseEnd - pauseStart) / 60000));
+  }, 0);
+}
+
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   const { user, error } = await requireAuth();
   if (error) return error;
@@ -232,7 +253,11 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
       const startTime = before.timerStartedAt ?? before.inProgressAt ?? before.createdAt;
       const elapsedMs = Math.max(0, timerStop.getTime() - new Date(startTime).getTime());
-      const timeTakenMinutes = Math.max(1, Math.round(elapsedMs / 60000));
+      const elapsedMinutes = Math.round(elapsedMs / 60000);
+      const lunchPauseMinutes = before.assigneeId
+        ? await getLunchPauseMinutes(before.assigneeId, new Date(startTime), timerStop)
+        : 0;
+      const timeTakenMinutes = Math.max(1, elapsedMinutes - lunchPauseMinutes);
       updateData.timeTakenMinutes = timeTakenMinutes;
 
       if (!before.actualMinutes && !parsed.data.actualMinutes) {
@@ -290,7 +315,11 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       const compDate = new Date();
       const startTime = before.timerStartedAt ?? before.inProgressAt ?? before.createdAt;
       const elapsedMs = Math.max(0, compDate.getTime() - new Date(startTime).getTime());
-      const timeTakenMinutes = before.timeTakenMinutes ?? Math.max(1, Math.round(elapsedMs / 60000));
+      const elapsedMinutes = Math.round(elapsedMs / 60000);
+      const lunchPauseMinutes = before.timeTakenMinutes == null && before.assigneeId
+        ? await getLunchPauseMinutes(before.assigneeId, new Date(startTime), compDate)
+        : 0;
+      const timeTakenMinutes = before.timeTakenMinutes ?? Math.max(1, elapsedMinutes - lunchPauseMinutes);
       updateData.timeTakenMinutes = timeTakenMinutes;
 
       const perf = calculatePerformanceFromTimer(

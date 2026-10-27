@@ -9,6 +9,8 @@ export interface AttendanceSession {
   clockIn:      string;
   clockOut:     string | null;
   durationMins: number | null;
+  lunchBreakStartAt?: string | Date | null;
+  lunchBreakEndAt?: string | Date | null;
   note:         string | null;
   createdAt:    string;
 }
@@ -457,4 +459,3 @@ export interface PaginatedResponse<T> {
 }
 
 export * from './report';
-
