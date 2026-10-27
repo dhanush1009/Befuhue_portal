@@ -40,6 +40,7 @@ export interface DashboardTask {
   status:     TaskStatus;
   priority:   Priority;
   dueDate:    string | null;
+  estimatedMinutes: number | null;
   project:    { id: string; name: string } | null;
   _count:     { comments: number };
 }
@@ -94,7 +95,8 @@ export function useMyTasks() {
       const json = await res.json() as { data: DashboardTask[] };
       return json.data;
     },
-    staleTime: 1000 * 60 * 5,
+    staleTime: 0,
+    refetchOnWindowFocus: true,
   });
 }
 

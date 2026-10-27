@@ -434,10 +434,20 @@ export function TaskDetailPanel({ taskId, onClose }: TaskDetailPanelProps) {
   function saveEffort(field: 'estimated' | 'actual') {
     if (!task) return;
     const total = toTotalMinutes(effortDraft.hours, effortDraft.minutes);
-    if (total < 1) return;
+    if (total < 1) {
+      toast.error('Assigned timing must be at least 1 minute');
+      return;
+    }
     if (field === 'estimated') {
-      handleUpdate({ estimatedMinutes: total } as Partial<Task>);
-      setEditingEstimated(false);
+      updateTask.mutate(
+        { id: task.id, estimatedMinutes: total },
+        {
+          onSuccess: () => {
+            setEditingEstimated(false);
+            toast.success('Task timing updated');
+          },
+        },
+      );
     } else {
       handleUpdate({ actualMinutes: total } as Partial<Task>);
       setEditingActual(false);
@@ -947,9 +957,15 @@ export function TaskDetailPanel({ taskId, onClose }: TaskDetailPanelProps) {
                       {(isAdmin || task.reporterId === user?.id) && !editingEstimated && (
                         <button
                           onClick={() => startEditEffort('estimated')}
-                          className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-gray-100 dark:hover:bg-surface-dark-3 transition-all duration-150 ml-auto"
+                          className={cn(
+                            'flex items-center gap-1 rounded hover:bg-gray-100 dark:hover:bg-surface-dark-3 transition-all duration-150 ml-auto',
+                            isAdmin && (task.assigneeId || (task.participants?.length ?? 0) > 0)
+                              ? 'px-1.5 py-1 text-[11px] font-medium text-brand'
+                              : 'opacity-0 group-hover:opacity-100 p-0.5',
+                          )}
                         >
                           <Pencil className="w-3 h-3 text-gray-400" />
+                          {isAdmin && (task.assigneeId || (task.participants?.length ?? 0) > 0) && 'Edit Timing'}
                         </button>
                       )}
                     </div>

@@ -21,6 +21,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       select: {
         id: true, humanId: true, title: true, status: true,
         priority: true, dueDate: true, createdAt: true, updatedAt: true,
+        estimatedMinutes: true,
         project:  { select: { id: true, name: true, prefix: true } },
         _count:   { select: { comments: true, subTasks: true } },
       },

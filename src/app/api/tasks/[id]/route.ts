@@ -250,6 +250,26 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       updateData.performanceOutcome = perf.outcome;
     }
 
+    // Changing the assigned time limit must not affect a running timer. If a
+    // task was already scored, refresh only its stored score using the new
+    // limit and the existing measured duration.
+    if (
+      parsed.data.estimatedMinutes !== undefined &&
+      parsed.data.estimatedMinutes !== before.estimatedMinutes &&
+      before.performancePoints != null &&
+      before.timeTakenMinutes != null
+    ) {
+      const completionTime = before.internalReviewAt ?? before.timerStoppedAt ?? before.doneAt ?? before.closedAt ?? new Date();
+      const perf = calculatePerformanceFromTimer(
+        before.timeTakenMinutes,
+        parsed.data.estimatedMinutes,
+        before.dueDate,
+        completionTime,
+      );
+      updateData.performancePoints = perf.points;
+      updateData.performanceOutcome = perf.outcome;
+    }
+
     if (isMovingToDone) {
       updateData.doneAt   = new Date();
       updateData.doneById = user.id;

@@ -1,9 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { CheckCircle, ArrowRight } from 'lucide-react';
+import { CheckCircle, ArrowRight, Clock } from 'lucide-react';
 import { isBefore } from 'date-fns';
 import { cn, formatDate } from '@/lib/utils';
+import { formatEffort } from '@/lib/effortUtils';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { PRIORITY_LEVELS } from '@/lib/constants';
@@ -80,6 +81,12 @@ export function MyTasksList({ tasks }: MyTasksListProps) {
                       isOverdue ? 'bg-red-50 dark:bg-red-900/20 text-status-absent' : 'bg-gray-100 dark:bg-surface-dark-3 text-gray-600 dark:text-violet-300/45',
                     )}>
                       {formatDate(task.dueDate, 'MMM d')}
+                    </span>
+                  )}
+                  {task.estimatedMinutes && (
+                    <span className="hidden sm:inline-flex items-center gap-1 text-[11px] font-medium text-gray-500 dark:text-violet-300/55 whitespace-nowrap shrink-0">
+                      <Clock className="w-3 h-3" />
+                      {formatEffort(task.estimatedMinutes)}
                     </span>
                   )}
                   <StatusBadge status={task.status} size="sm" className="shrink-0" />
