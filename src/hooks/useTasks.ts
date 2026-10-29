@@ -18,6 +18,8 @@ export interface TaskFilters {
   team?:          Team;
   blocked?:       boolean;
   dueRange?:      'overdue' | 'this_week';
+  assignedDay?:   string;
+  assignedMonth?: string;
 }
 
 export type GroupBy = 'none' | 'client' | 'project' | 'team' | 'assignee';
@@ -46,7 +48,9 @@ export function useTasks(filters: TaskFilters = {}) {
   if (filters.dueRange)     params.set('dueRange',     filters.dueRange);
 
   return useQuery({
-    queryKey: ['tasks', filters],
+    // Assignment-period filters are applied to the already fetched task list
+    // so the task API and its existing date semantics remain unchanged.
+    queryKey: ['tasks', params.toString()],
     queryFn: async (): Promise<Task[]> => {
       const res = await fetch(`/api/tasks?${params.toString()}`);
       if (!res.ok) throw new Error('Failed to fetch tasks');

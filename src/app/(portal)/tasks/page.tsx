@@ -1,8 +1,9 @@
 'use client';
 
-import { Suspense, useEffect, useState, useCallback } from 'react';
+import { Suspense, useEffect, useState, useCallback, useMemo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
+import { CalendarDays } from 'lucide-react';
 import { useUIStore } from '@/store/useUIStore';
 import { useTasks, type TaskFilters, type GroupBy } from '@/hooks/useTasks';
 import { KanbanBoard }            from '@/components/tasks/KanbanBoard';
@@ -13,8 +14,10 @@ import { TaskForm }               from '@/components/tasks/TaskForm';
 import { ProjectForm }            from '@/components/tasks/ProjectForm';
 import { ItemTypeSelector }       from '@/components/tasks/ItemTypeSelector';
 import { PageLoader }             from '@/components/shared/PageLoader';
+import { EmptyState }             from '@/components/shared/EmptyState';
 import type { Task } from '@/types';
 import type { TaskStatus } from '@prisma/client';
+import { format } from 'date-fns';
 
 const BugReportForm = dynamic(
   () => import('@/components/tasks/BugReportForm').then((m) => m.BugReportForm),
@@ -53,6 +56,21 @@ function TasksInner() {
   const [groupBy,           setGroupBy]           = useState<GroupBy>('none');
 
   const { data: tasks = [], isLoading } = useTasks(filters);
+  const filteredTasks = useMemo(() => {
+    if (!filters.assignedDay && !filters.assignedMonth) return tasks;
+
+    return tasks.filter((task) => {
+      const assignedDate = new Date(task.createdAt);
+      if (filters.assignedDay) return format(assignedDate, 'yyyy-MM-dd') === filters.assignedDay;
+      return format(assignedDate, 'yyyy-MM') === filters.assignedMonth;
+    });
+  }, [tasks, filters.assignedDay, filters.assignedMonth]);
+
+  const periodLabel = filters.assignedDay
+    ? format(new Date(`${filters.assignedDay}T00:00:00`), 'MMMM d, yyyy')
+    : filters.assignedMonth
+      ? format(new Date(`${filters.assignedMonth}-01T00:00:00`), 'MMMM yyyy')
+      : '';
 
   useEffect(() => { setPageTitle('Task Board'); }, [setPageTitle]);
 
@@ -94,6 +112,7 @@ function TasksInner() {
         view={view}
         onViewChange={handleViewChange}
         filters={filters}
+        tasks={tasks}
         onFilters={handleFilters}
         groupBy={groupBy}
         onGroupByChange={setGroupBy}
@@ -106,16 +125,22 @@ function TasksInner() {
 
       {isLoading ? (
         <PageLoader />
+      ) : filteredTasks.length === 0 && (filters.assignedDay || filters.assignedMonth) ? (
+        <EmptyState
+          icon={<CalendarDays className="w-10 h-10" />}
+          title={filters.assignedMonth ? 'No tasks assigned for this month.' : 'No tasks assigned for this period.'}
+          description={periodLabel}
+        />
       ) : view === 'board' ? (
         <KanbanBoard
-          tasks={tasks}
+          tasks={filteredTasks}
           filters={filters}
           groupBy={groupBy}
           onOpen={handleOpenTask}
           onAddTask={handleAddTask}
         />
       ) : (
-        <ListView tasks={tasks} onOpen={handleOpenTask} />
+        <ListView tasks={filteredTasks} onOpen={handleOpenTask} />
       )}
 
       {selectedTaskId && (

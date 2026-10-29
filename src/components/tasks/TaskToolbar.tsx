@@ -11,6 +11,8 @@ import { PRIORITY_LEVELS } from '@/lib/constants';
 import { useState, useEffect } from 'react';
 import type { TaskFilters, GroupBy } from '@/hooks/useTasks';
 import type { Priority, ItemType } from '@prisma/client';
+import type { Task } from '@/types';
+import { format } from 'date-fns';
 
 export type ViewMode = 'board' | 'list';
 
@@ -18,6 +20,7 @@ interface TaskToolbarProps {
   view: ViewMode;
   onViewChange: (v: ViewMode) => void;
   filters: TaskFilters;
+  tasks: Task[];
   onFilters: (f: TaskFilters) => void;
   groupBy: GroupBy;
   onGroupByChange: (g: GroupBy) => void;
@@ -68,7 +71,7 @@ function FilterDropdown({ label, active, children }: FilterDropdownProps) {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function TaskToolbar({ view, onViewChange, filters, onFilters, groupBy, onGroupByChange, onNewItem, onNewProject }: TaskToolbarProps) {
+export function TaskToolbar({ view, onViewChange, filters, tasks, onFilters, groupBy, onGroupByChange, onNewItem, onNewProject }: TaskToolbarProps) {
   const { isAdmin } = useAuth();
   const { data: employees = [] } = useEmployeeList();
   const { data: clients = [] } = useClients();
@@ -85,6 +88,18 @@ export function TaskToolbar({ view, onViewChange, filters, onFilters, groupBy, o
   const selectedProject = projects.find((p) => p.id === filters.projectId);
   const selectedEmployee = employees.find((e) => e.id === filters.assigneeId);
   const selectedClient = clients.find((c) => c.id === filters.clientId);
+  const monthNames = Array.from({ length: 12 }, (_, month) =>
+    format(new Date(2000, month, 1), 'MMMM'),
+  );
+  const availableYears = Array.from(new Set([
+    new Date().getFullYear(),
+    ...tasks.map((task) => new Date(task.createdAt).getFullYear()),
+  ])).sort((a, b) => b - a);
+  const assignedPeriodLabel = filters.assignedDay
+    ? format(new Date(`${filters.assignedDay}T00:00:00`), 'MMM d, yyyy')
+    : filters.assignedMonth
+      ? format(new Date(`${filters.assignedMonth}-01T00:00:00`), 'MMMM yyyy')
+      : 'Assigned date';
 
   const DUE_RANGES: { value: 'overdue' | 'this_week'; label: string }[] = [
     { value: 'overdue', label: 'Overdue' },
@@ -102,6 +117,7 @@ export function TaskToolbar({ view, onViewChange, filters, onFilters, groupBy, o
   const activeFilterCount = [
     filters.projectId, filters.assigneeId, filters.priority, filters.itemType,
     filters.clientId, filters.dueRange,
+    filters.assignedDay, filters.assignedMonth,
     filters.blocked ? 'blocked' : undefined,
   ].filter(Boolean).length;
 
@@ -275,6 +291,52 @@ export function TaskToolbar({ view, onViewChange, filters, onFilters, groupBy, o
           >
             {d.label}
           </button>
+        ))}
+      </FilterDropdown>
+
+      {/* ── Assignment date filter ── */}
+      <FilterDropdown
+        label={assignedPeriodLabel}
+        active={!!filters.assignedDay || !!filters.assignedMonth}
+      >
+        <button
+          className={optionClass(!filters.assignedDay && !filters.assignedMonth)}
+          onClick={() => onFilters({ ...filters, assignedDay: undefined, assignedMonth: undefined })}
+        >
+          All dates
+        </button>
+        <div className="border-t border-gray-100 dark:border-violet-900/30 my-1" />
+        <label className="block px-3 py-2 text-xs font-medium text-gray-500 dark:text-violet-300/70">
+          Day
+          <input
+            type="date"
+            value={filters.assignedDay ?? ''}
+            onChange={(e) => onFilters({
+              ...filters,
+              assignedDay: e.target.value || undefined,
+              assignedMonth: undefined,
+            })}
+            className="mt-1 w-full rounded-md border border-gray-200 dark:border-violet-900/40 bg-white dark:bg-[#131317] px-2 py-1.5 text-sm text-gray-700 dark:text-violet-200 dark:[color-scheme:dark]"
+          />
+        </label>
+        <div className="border-t border-gray-100 dark:border-violet-900/30 my-1" />
+        <div className="px-3 py-1.5 text-xs font-medium text-gray-500 dark:text-violet-300/70">Month</div>
+        {availableYears.map((year) => (
+          <div key={year}>
+            <div className="px-3 py-1.5 text-xs font-semibold text-gray-400 dark:text-violet-400/70">{year}</div>
+            {monthNames.map((monthName, monthIndex) => {
+              const month = `${year}-${String(monthIndex + 1).padStart(2, '0')}`;
+              return (
+                <button
+                  key={month}
+                  className={optionClass(filters.assignedMonth === month)}
+                  onClick={() => onFilters({ ...filters, assignedDay: undefined, assignedMonth: month })}
+                >
+                  {monthName} {year}
+                </button>
+              );
+            })}
+          </div>
         ))}
       </FilterDropdown>
 
